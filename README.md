@@ -93,7 +93,7 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8, Adafruit MLX9064
   - Other devices listed but no `0x33`: the bus works, but the sensor isn't connected. Check VCC/GND and that SDA/SCL aren't swapped.
   - `none`: the pins in `config.h` don't match where you soldered.
 - **"PSRAM is off" on screen:** set *Tools → PSRAM → OPI PSRAM* and upload again.
-- **Black screen, nothing at all:** open the Serial Monitor. The first line says which display revision was detected.
+- **Black screen, nothing at all:** unplug the board and plug it back in without holding BOOT; it won't run the new firmware while it's still in flashing mode. If it's still black, read the board's status messages. In the Arduino IDE, open the Serial Monitor at 115200 baud. On the esptool-js page, use the **Console** section: click **Connect**, pick the port, then click **Reset**. When no sensor is connected, a status line repeats every 2 seconds and names the display revision and PSRAM size.
 - **"Sensor stopped" after it was working:** loose wire, or a long or noisy cable. Keep the sensor wires short.
 - **Checkerboard pattern on moving objects:** the shared bus isn't keeping up with the sensor. Set `SENSOR_REFRESH` to `MLX90640_8_HZ`.
 - **Readings seem low on shiny metal:** this is normal for all thermal cameras. Shiny surfaces reflect heat instead of giving it off. Readings assume emissivity 0.95, which is right for skin, wood, paint, plastic and food. Put a piece of matte tape on metal to measure it.
@@ -103,4 +103,4 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8, Adafruit MLX9064
 
 - The sensor is read on CPU core 0 at up to 16 sub-pages/s, using the Adafruit/Melexis calibration math. Finished frames are passed to core 1.
 - Core 1 upscales each 32×24 frame with integer bilinear interpolation into a full-screen RGB565 frame buffer in PSRAM. It then draws the overlays and sends the whole buffer to the AMOLED over QSPI.
-- Before the display starts, the sketch pulses the reset lines on the board's IO expander, the same way Waveshare's examples do. It then checks which touch chip answers to tell the two board revisions apart.
+- Before the display starts, the sketch pulses the reset lines on the board's IO expander, the same way Waveshare's examples do. Both panels are started with the CO5300 init sequence, as Waveshare's own board driver does. The V2 panel also needs a 16-column offset. The sketch applies it unless the original board's FT3168 touch chip answers.

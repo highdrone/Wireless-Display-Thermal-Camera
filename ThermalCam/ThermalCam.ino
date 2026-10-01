@@ -32,7 +32,7 @@
 #define BOOT_BUTTON 0
 
 #define TCA9554_ADDR 0x20  // IO expander; EXIO0-2 are display/touch reset lines
-#define CST820_ADDR 0x15   // touch chip on the V2 board, which has the CO5300 panel
+#define FT3168_ADDR 0x38   // touch chip on the original board (SH8601 panel)
 
 #define SENSOR_W 32
 #define SENSOR_H 24
@@ -72,6 +72,7 @@ static uint16_t paletteLut[PALETTE_COUNT][256];
 static uint8_t paletteIdx = 0;
 static bool fahrenheit = START_IN_FAHRENHEIT;
 static float rangeLo = NAN, rangeHi = NAN;  // smoothed color scale, degrees C
+static const char *boardName = "?";
 static char toastText[24] = "";
 static uint32_t toastUntil = 0;
 static bool screenDirty = true;  // a message screen left text outside the picture
@@ -140,16 +141,22 @@ static bool initDisplay() {
   Wire.begin(BOARD_SDA, BOARD_SCL, 400000);
   resetDisplayAndTouch();
 
-  // The two board revisions use different panels; the touch chip tells them apart.
-  const bool v2 = i2cPresent(Wire, CST820_ADDR);
-  Serial.printf("Display: %s\n", v2 ? "V2 (CO5300)" : "original (SH8601)");
-
-  bus = new Arduino_ESP32QSPI(LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
-  if (v2) {
-    panel = new Arduino_CO5300(bus, GFX_NOT_DEFINED, 0, LCD_WIDTH, LCD_HEIGHT, 16, 0, 0, 0);
-  } else {
-    panel = new Arduino_SH8601(bus, GFX_NOT_DEFINED, 0, LCD_WIDTH, LCD_HEIGHT);
+  // The touch chip tells the two board revisions apart. The original board's
+  // FT3168 answers once it has booted; the V2 board's CST820 may be asleep, so
+  // anything else is treated as V2.
+  bool v1 = false;
+  for (int i = 0; i < 10 && !v1; i++) {
+    v1 = i2cPresent(Wire, FT3168_ADDR);
+    if (!v1) delay(50);
   }
+  boardName = v1 ? "original (SH8601)" : "V2 (CO5300)";
+  Serial.printf("Display: %s\n", boardName);
+  Serial.printf("PSRAM: %u bytes\n", (unsigned)ESP.getPsramSize());
+
+  // Waveshare's own driver starts both panels with the CO5300 init sequence;
+  // only the V2 panel's 16-column offset differs.
+  bus = new Arduino_ESP32QSPI(LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
+  panel = new Arduino_CO5300(bus, GFX_NOT_DEFINED, 0, LCD_WIDTH, LCD_HEIGHT, v1 ? 0 : 16, 0, 0, 0);
   if (!panel->begin()) {
     Serial.println("Display init failed");
     return false;
@@ -276,8 +283,8 @@ static void startSensor() {
   showMessage("Thermal camera", "Starting sensor...");
   while (!mlx.begin(MLX90640_I2CADDR_DEFAULT, &w)) {
     const String seen = scanBus(w);
-    Serial.printf("MLX90640 not found on SDA=%d SCL=%d. I2C devices: %s\n", THERMAL_SDA, THERMAL_SCL,
-                  seen.c_str());
+    Serial.printf("Display %s, PSRAM %u. MLX90640 not found on SDA=%d SCL=%d. I2C devices: %s\n",
+                  boardName, (unsigned)ESP.getPsramSize(), THERMAL_SDA, THERMAL_SCL, seen.c_str());
     char where[40];
     snprintf(where, sizeof(where), "on SDA=GPIO%d, SCL=GPIO%d.", THERMAL_SDA, THERMAL_SCL);
     showMessage("Sensor not found",
