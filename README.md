@@ -43,7 +43,7 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
 
 **Using two GPIO pads instead of the I2C pads?** Put those GPIO numbers in `THERMAL_SDA` / `THERMAL_SCL` in `ThermalCam/config.h`. The sensor then gets its own I2C bus at 800 kHz.
 
-**Mounting:** put the sensor on the back of the board, pointing away from you. If the picture moves the wrong way when you pan, set `MIRROR_IMAGE true` in `config.h`. If it's upside down, change `SCREEN_ROTATION` from 1 to 3.
+**Mounting:** put the sensor on the back of the board, pointing away from you. If the picture moves the wrong way when you pan, change `MIRROR_IMAGE` in `config.h`. If it's upside down, change `SCREEN_ROTATION` from 1 to 3.
 
 ## 3a. Quick flash (no Arduino needed, default settings)
 
@@ -82,7 +82,8 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8, Adafruit MLX9064
 | `THERMAL_SDA` / `THERMAL_SCL` | 15 / 14 | Sensor I2C pins |
 | `SENSOR_REFRESH` | `MLX90640_16_HZ` | 16 Hz ≈ 8 frames/s. 32 Hz is faster but noisier, and only keeps up on a dedicated bus. |
 | `SCREEN_ROTATION` | 1 | 1 or 3 = landscape, 0 or 2 = portrait |
-| `MIRROR_IMAGE` / `FLIP_IMAGE` | false | Flip the picture left/right or up/down |
+| `MIRROR_IMAGE` | true | Flip the picture left/right. True is correct with the sensor pointing away from you. |
+| `FLIP_IMAGE` | false | Turn the picture upside down |
 | `SCREEN_BRIGHTNESS` | 200 | 0-255 |
 | `START_IN_FAHRENHEIT` | false | Starting unit (the BOOT button overrides it) |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |

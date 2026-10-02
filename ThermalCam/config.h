@@ -26,7 +26,7 @@
 
 // Mirror the picture left/right. Turn this on if the sensor points away from
 // you (like a normal camera) and the picture moves the wrong way when you pan.
-#define MIRROR_IMAGE false
+#define MIRROR_IMAGE true
 // Turn the picture upside down (if the sensor is mounted the other way up).
 #define FLIP_IMAGE false
 
