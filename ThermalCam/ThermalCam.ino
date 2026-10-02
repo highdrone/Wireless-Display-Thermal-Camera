@@ -963,8 +963,8 @@ void setup() {
   for (int i = 0; i < 3; i++) pollImu();  // start the right way up
   if (wantedRot != currentRot) applyRotation(wantedRot);
   if (!mountSd()) Serial.println("No SD card");
-  lastActivityMs = millis();
   startSensor();
+  lastActivityMs = millis();  // count idle time from when the camera is running
 }
 
 void loop() {
