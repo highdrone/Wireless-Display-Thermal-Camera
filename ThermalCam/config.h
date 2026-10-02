@@ -20,9 +20,18 @@
 #define SENSOR_REFRESH MLX90640_16_HZ
 
 // ---- Picture orientation ---------------------------------------------------
-// 1 or 3 = landscape (big picture). Pick whichever is right-side up for how
-// you hold the board. 0 or 2 = portrait (smaller picture).
+// Starting orientation. 1 or 3 = landscape, 0 or 2 = portrait (smaller
+// picture, only without AUTO_ROTATE).
 #define SCREEN_ROTATION 1
+
+// Flip the screen and picture between the two landscape orientations to match
+// how the board is held, using the board's built-in motion sensor.
+#define AUTO_ROTATE true
+// Set true if auto-rotate turns the screen upside down instead of right side up.
+#define AUTO_ROTATE_INVERT false
+// Set true once the thermal sensor is mounted on the board so it turns with
+// it. The picture then stays put on the screen and only the text flips.
+#define SENSOR_FIXED_TO_BOARD false
 
 // Mirror the picture left/right. Turn this on if the sensor points away from
 // you (like a normal camera) and the picture moves the wrong way when you pan.
@@ -36,6 +45,14 @@
 // moved inward to clear them. Raise it if corner text is still clipped.
 #define SCREEN_CORNER_RADIUS 48
 #define START_IN_FAHRENHEIT false
+
+// ---- Auto-off --------------------------------------------------------------
+// Turn off after this many seconds without a button press or screen tap
+// (0 = never). On battery the board powers off; on USB power only the screen
+// turns off.
+#define IDLE_OFF_SECONDS 60
+// Show a "tap screen to keep using" countdown for this many seconds first.
+#define IDLE_WARNING_SECONDS 10
 
 // The color scale always stretches over at least this many degrees C. This
 // stops sensor noise from looking like a rainbow when everything in view is

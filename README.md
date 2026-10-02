@@ -9,7 +9,10 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 - The 32×24 sensor image is smoothed and upscaled to fill the screen (448×336, landscape).
 - Top left: temperature at the crosshair (the center of the image).
 - The ring marks the hottest spot.
+- Top right: battery level, with a lightning bolt while charging. It shows "USB" when running without a battery.
 - The bar at the bottom shows the coldest and hottest temperatures and the color scale. The scale adjusts itself to the scene.
+- The screen flips to stay right side up whichever way you hold the board in landscape. It uses the board's built-in motion sensor.
+- After a minute without use, a 10-second countdown appears. Tap the screen to keep going. Otherwise the camera turns off.
 - About 8 frames per second.
 - Both board revisions work: the original (SH8601 display) and V2 (CO5300 display). The sketch detects which one you have.
 
@@ -19,10 +22,20 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 | --- | --- |
 | BOOT, short press | Next palette: Ironbow → Rainbow → Hot → White hot → Black hot |
 | BOOT, hold (~1 s) | Switch between °C and °F |
-| PWR, short press | Save a picture to the microSD card |
+| PWR, short press | Save a picture to the microSD card. When off, it turns the camera on. |
 | PWR, long press | Turn the board off (handled by the power chip itself) |
+| Tap the screen | Keep the camera on during the auto-off countdown, or wake a dark screen |
 
 The board remembers your palette and unit choice after power-off.
+
+## Auto-off
+
+The camera counts as idle when nobody presses a button, taps the screen, turns the board over, or plugs in or unplugs USB. After 50 idle seconds a countdown appears, and at 60 seconds:
+
+- **On battery:** the camera powers off completely. Press **PWR** to turn it back on.
+- **On USB power:** only the screen turns off. Tap it, or press any button, to wake it. Waking presses don't change the palette or save a picture.
+
+Change the times with `IDLE_OFF_SECONDS` and `IDLE_WARNING_SECONDS` in `config.h`, or set `IDLE_OFF_SECONDS` to 0 to turn auto-off off.
 
 ## Saving pictures
 
@@ -54,7 +67,7 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
 
 **Using two GPIO pads instead of the I2C pads?** Put those GPIO numbers in `THERMAL_SDA` / `THERMAL_SCL` in `ThermalCam/config.h`. The sensor then gets its own I2C bus at 800 kHz.
 
-**Mounting:** put the sensor on the back of the board, pointing away from you. If the picture moves the wrong way when you pan, change `MIRROR_IMAGE` in `config.h`. If it's upside down, change `SCREEN_ROTATION` from 1 to 3.
+**Mounting:** put the sensor on the back of the board, pointing away from you. If the picture moves the wrong way when you pan, change `MIRROR_IMAGE` in `config.h`. The screen flips itself to stay right side up. By default the picture flips with it, which suits a sensor on loose wires. Once the sensor is fixed to the board, set `SENSOR_FIXED_TO_BOARD true` so only the text flips. If auto-rotate turns the screen upside down instead of right side up, set `AUTO_ROTATE_INVERT true`.
 
 ## 3a. Quick flash (no Arduino needed, default settings)
 
@@ -92,12 +105,17 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8, Adafruit MLX9064
 | --- | --- | --- |
 | `THERMAL_SDA` / `THERMAL_SCL` | 15 / 14 | Sensor I2C pins |
 | `SENSOR_REFRESH` | `MLX90640_16_HZ` | 16 Hz ≈ 8 frames/s. 32 Hz is faster but noisier, and only keeps up on a dedicated bus. |
-| `SCREEN_ROTATION` | 1 | 1 or 3 = landscape, 0 or 2 = portrait |
+| `SCREEN_ROTATION` | 1 | Starting orientation: 1 or 3 = landscape, 0 or 2 = portrait (portrait only without auto-rotate) |
+| `AUTO_ROTATE` | true | Flip between the two landscape orientations to match how the board is held |
+| `AUTO_ROTATE_INVERT` | false | Set true if auto-rotate turns the screen upside down |
+| `SENSOR_FIXED_TO_BOARD` | false | Set true once the sensor is mounted on the board: the picture then stays put and only the text flips |
 | `MIRROR_IMAGE` | true | Flip the picture left/right. True is correct with the sensor pointing away from you. |
 | `FLIP_IMAGE` | false | Turn the picture upside down |
 | `SCREEN_BRIGHTNESS` | 200 | 0-255 |
 | `SCREEN_CORNER_RADIUS` | 48 | Size of the screen's rounded corners in pixels. Text near the corners moves inward to clear them. |
 | `START_IN_FAHRENHEIT` | false | Starting unit (the BOOT button overrides it) |
+| `IDLE_OFF_SECONDS` | 60 | Turn off after this many idle seconds (0 = never) |
+| `IDLE_WARNING_SECONDS` | 10 | Length of the "tap screen to keep using" countdown |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |
 
 ## Troubleshooting
@@ -119,3 +137,4 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8, Adafruit MLX9064
 - The sensor is read on CPU core 0 at up to 16 sub-pages/s, using the Adafruit/Melexis calibration math. Finished frames are passed to core 1.
 - Core 1 upscales each 32×24 frame with integer bilinear interpolation into a full-screen RGB565 frame buffer in PSRAM. It then draws the overlays and sends the whole buffer to the AMOLED over QSPI.
 - Before the display starts, the sketch pulses the reset lines on the board's IO expander, the same way Waveshare's examples do. Both panels are started with the CO5300 init sequence, as Waveshare's own board driver does. The V2 panel also needs a 16-column offset. The sketch applies it unless the original board's FT3168 touch chip answers.
+- Once running, the sensor task on core 0 is the only code that uses the board's I2C bus. Between frames it also reads the power chip (PWR button and battery), the touch chip and the motion sensor. Core 1 reads the results, so no two tasks ever talk on the bus at the same time.

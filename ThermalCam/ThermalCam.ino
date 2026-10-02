@@ -5,6 +5,8 @@
 // BOOT button: short press = next color palette, hold = switch C / F.
 // PWR button: short press = save a picture (BMP) and temperatures (CSV) to the
 // microSD card.
+// The screen flips to stay right side up, and the camera turns itself off
+// after a minute without use (tap the screen to keep it on).
 //
 // Libraries (Arduino Library Manager):
 //   "GFX Library for Arduino" by Moon On Our Nation
@@ -36,13 +38,23 @@
 #define SD_CLK 2
 #define SD_CMD 1
 #define SD_D0 3
+#define TP_INT 21  // touch interrupt
 
 #define TCA9554_ADDR 0x20  // IO expander; EXIO0-2 are display/touch reset lines
 #define FT3168_ADDR 0x38   // touch chip on the original board (SH8601 panel)
+#define CST820_ADDR 0x15   // touch chip on the V2 board
+#define QMI8658_ADDR_A 0x6B  // motion sensor (address depends on the board)
+#define QMI8658_ADDR_B 0x6A
 #define AXP2101_ADDR 0x34  // power chip; the PWR button is wired to it
 #define AXP2101_INTEN2 0x41   // IRQ enable 2
 #define AXP2101_INTSTS2 0x49  // IRQ status 2, write 1 to clear
 #define AXP2101_PKEY_SHORT 0x08  // bit 3 of both: PWR button short press
+#define AXP2101_STATUS1 0x00      // bit 5: USB power present, bit 3: battery present
+#define AXP2101_STATUS2 0x01      // bits 6-5: 1 = charging
+#define AXP2101_COMMON_CONFIG 0x10  // bit 0: power off
+#define AXP2101_GAUGE_CTRL 0x18   // bit 3: fuel gauge on
+#define AXP2101_BAT_DET_CTRL 0x68 // bit 0: battery detection on
+#define AXP2101_BAT_PERCENT 0xA4
 
 #define SENSOR_W 32
 #define SENSOR_H 24
@@ -56,6 +68,9 @@ static const bool SENSOR_ON_BOARD_BUS = (THERMAL_SDA == BOARD_SDA && THERMAL_SCL
 
 static const uint16_t COLOR_BLACK = 0x0000;
 static const uint16_t COLOR_WHITE = 0xFFFF;
+static const uint16_t COLOR_GREEN = 0x07E0;
+static const uint16_t COLOR_YELLOW = 0xFFE0;
+static const uint16_t COLOR_RED = 0xF800;
 
 static Arduino_DataBus *bus;
 static Arduino_OLED *panel;
@@ -87,9 +102,27 @@ static const char *boardName = "?";
 static char toastText[24] = "";
 static uint32_t toastUntil = 0;
 static bool screenDirty = true;  // a message screen left text outside the picture
+static bool boardIsV1 = false;
 static bool pmuFound = false;
-static volatile bool powerKeyPressed = false;  // set by the sensor task
 static bool sdMounted = false;
+static uint8_t currentRot = SCREEN_ROT;  // screen rotation in use
+static bool imgMirror = MIRROR_IMAGE, imgFlip = FLIP_IMAGE;  // picture orientation for currentRot
+static uint8_t touchAddr = 0, imuAddr = 0;
+
+// Written by the sensor task, which is the only user of the board's I2C bus
+// once it runs, and by the touch interrupt.
+static TaskHandle_t sensorTaskHandle = nullptr;
+static volatile bool powerKeyPressed = false;
+static volatile bool touchSeen = false;
+static volatile uint8_t wantedRot = SCREEN_ROT;  // from the motion sensor
+static volatile bool battKnown = false, battPresent = false, battCharging = false, vbusPresent = false;
+static volatile int8_t battPercent = -1;
+static volatile bool powerOffRequested = false;
+
+// Auto-off.
+static uint32_t lastActivityMs = 0;
+static uint32_t idleWarnLeftMs = 0;  // > 0 while the countdown is showing
+static bool screenAsleep = false;
 
 struct FrameStats {
   float minT, maxT, centerT;
@@ -105,20 +138,27 @@ static bool i2cPresent(TwoWire &w, uint8_t addr) {
   return w.endTransmission() == 0;
 }
 
-static bool i2cReadReg(uint8_t addr, uint8_t reg, uint8_t &val) {
+static bool i2cReadRegs(uint8_t addr, uint8_t reg, uint8_t *buf, uint8_t len) {
   Wire.beginTransmission(addr);
   Wire.write(reg);
   if (Wire.endTransmission(false) != 0) return false;
-  if (Wire.requestFrom(addr, (uint8_t)1) != 1) return false;
-  val = Wire.read();
+  if (Wire.requestFrom(addr, len) != len) return false;
+  for (uint8_t i = 0; i < len; i++) buf[i] = Wire.read();
   return true;
 }
+
+static bool i2cReadReg(uint8_t addr, uint8_t reg, uint8_t &val) { return i2cReadRegs(addr, reg, &val, 1); }
 
 static void i2cWriteReg(uint8_t addr, uint8_t reg, uint8_t val) {
   Wire.beginTransmission(addr);
   Wire.write(reg);
   Wire.write(val);
   Wire.endTransmission();
+}
+
+static void i2cSetBits(uint8_t addr, uint8_t reg, uint8_t bits) {
+  uint8_t v;
+  if (i2cReadReg(addr, reg, v) && (v & bits) != bits) i2cWriteReg(addr, reg, v | bits);
 }
 
 static String scanBus(TwoWire &w) {
@@ -147,15 +187,18 @@ static void resetDisplayAndTouch() {
   delay(100);
 }
 
-// Have the power chip latch PWR button short presses so we can poll for them.
-static void initPowerKey() {
+// Power chip: latch PWR button short presses so we can poll for them, and
+// make sure battery detection and the fuel gauge are running.
+static void initPower() {
   uint8_t en;
   if (!i2cReadReg(AXP2101_ADDR, AXP2101_INTEN2, en)) {
-    Serial.println("Power chip not found, PWR button capture disabled");
+    Serial.println("Power chip not found: no PWR button capture or battery level");
     return;
   }
   i2cWriteReg(AXP2101_ADDR, AXP2101_INTSTS2, AXP2101_PKEY_SHORT);  // drop any old press
   i2cWriteReg(AXP2101_ADDR, AXP2101_INTEN2, en | AXP2101_PKEY_SHORT);
+  i2cSetBits(AXP2101_ADDR, AXP2101_BAT_DET_CTRL, 0x01);
+  i2cSetBits(AXP2101_ADDR, AXP2101_GAUGE_CTRL, 0x08);
   pmuFound = true;
 }
 
@@ -168,6 +211,85 @@ static void pollPowerKey() {
     i2cWriteReg(AXP2101_ADDR, AXP2101_INTSTS2, AXP2101_PKEY_SHORT);
     powerKeyPressed = true;
   }
+}
+
+static void pollBattery() {
+  uint8_t st[2], pct;
+  if (!pmuFound || !i2cReadRegs(AXP2101_ADDR, AXP2101_STATUS1, st, 2)) return;
+  vbusPresent = st[0] & 0x20;
+  battPresent = st[0] & 0x08;
+  battCharging = ((st[1] >> 5) & 0x03) == 1;
+  if (!battPresent) {
+    battPercent = -1;
+  } else if (i2cReadReg(AXP2101_ADDR, AXP2101_BAT_PERCENT, pct) && pct <= 100) {
+    battPercent = pct;
+  }
+  battKnown = true;
+}
+
+// Cuts the board's power, like holding PWR. Only from the task that owns I2C.
+static void powerOffNow() { i2cSetBits(AXP2101_ADDR, AXP2101_COMMON_CONFIG, 0x01); }
+
+static void IRAM_ATTR onTouchInterrupt() { touchSeen = true; }
+
+static void initTouch() {
+  touchAddr = boardIsV1 ? FT3168_ADDR : CST820_ADDR;
+  if (!boardIsV1) {
+    i2cWriteReg(CST820_ADDR, 0xFE, 0x01);  // no auto-sleep, so it always answers polls
+    i2cWriteReg(CST820_ADDR, 0xFA, 0x60);  // pulse the interrupt line on touches
+  }
+  pinMode(TP_INT, INPUT_PULLUP);
+  attachInterrupt(TP_INT, onTouchInterrupt, FALLING);
+}
+
+// Backs up the interrupt line: register 0x02 is the finger count on both chips.
+static void pollTouch() {
+  uint8_t n;
+  if (touchAddr && i2cReadReg(touchAddr, 0x02, n) && (n & 0x0F) >= 1 && (n & 0x0F) <= 5) touchSeen = true;
+}
+
+static void initImu() {
+  if (!AUTO_ROTATE) return;
+  const uint8_t addrs[] = {QMI8658_ADDR_A, QMI8658_ADDR_B};
+  for (uint8_t a : addrs) {
+    uint8_t id;
+    if (i2cReadReg(a, 0x00, id) && id == 0x05) {  // WHO_AM_I
+      imuAddr = a;
+      break;
+    }
+  }
+  if (!imuAddr) {
+    Serial.println("Motion sensor not found, auto-rotate off");
+    return;
+  }
+  i2cWriteReg(imuAddr, 0x02, 0x40);  // CTRL1: auto-increment register address
+  i2cWriteReg(imuAddr, 0x03, 0x17);  // CTRL2: accelerometer +-4 g, 62.5 Hz
+  i2cWriteReg(imuAddr, 0x08, 0x01);  // CTRL7: accelerometer on, gyro off
+}
+
+// Picks the landscape rotation from gravity. The motion sensor's Y axis runs
+// along the screen's short side (per Waveshare's tilt demo), so its sign says
+// which way up the board is held. A change must hold for 3 readings in a row.
+static void pollImu() {
+  static uint8_t candidate = 0, streak = 0;
+  uint8_t d[6];
+  if (!imuAddr || !i2cReadRegs(imuAddr, 0x35, d, sizeof(d))) return;
+  float gy = (int16_t)(d[2] | (d[3] << 8)) / 8192.0f;  // in g
+  if (AUTO_ROTATE_INVERT) gy = -gy;
+  uint8_t r;
+  if (gy > 0.55f) {
+    r = 1;
+  } else if (gy < -0.55f) {
+    r = 3;
+  } else {
+    streak = 0;  // lying flat or standing on end: keep the current way up
+    return;
+  }
+  if (r != candidate) {
+    candidate = r;
+    streak = 0;
+  }
+  if (++streak >= 3) wantedRot = r;
 }
 
 // ============================================================================
@@ -186,6 +308,7 @@ static bool initDisplay() {
     v1 = i2cPresent(Wire, FT3168_ADDR);
     if (!v1) delay(50);
   }
+  boardIsV1 = v1;
   boardName = v1 ? "original (SH8601)" : "V2 (CO5300)";
   Serial.printf("Display: %s\n", boardName);
   Serial.printf("PSRAM: %u bytes\n", (unsigned)ESP.getPsramSize());
@@ -240,11 +363,16 @@ static void setupLayout() {
   imgX = (scrW - imgW) / 2;
   imgY = (scrH - BAR_H - imgH) / 2;
 
-  buildAxis(imgW, SENSOR_W, MIRROR_IMAGE, xSrc0, xSrc1, xWeight);
-  buildAxis(imgH, SENSOR_H, FLIP_IMAGE, ySrc0, ySrc1, yWeight);
+  // The picture turns with the screen. A sensor fixed to the board already
+  // turns with it, so then the picture is turned back to stay put.
+  const bool turnedBack = SENSOR_FIXED_TO_BOARD && ((currentRot - SCREEN_ROT) & 3) == 2;
+  imgMirror = MIRROR_IMAGE != turnedBack;
+  imgFlip = FLIP_IMAGE != turnedBack;
+  buildAxis(imgW, SENSOR_W, imgMirror, xSrc0, xSrc1, xWeight);
+  buildAxis(imgH, SENSOR_H, imgFlip, ySrc0, ySrc1, yWeight);
 
   // Same mapping as Arduino_Canvas::writePixelPreclipped().
-  switch (SCREEN_ROT) {
+  switch (currentRot) {
     case 1: fbBase = LCD_WIDTH - 1; fbDx = LCD_WIDTH; fbDy = -1; break;
     case 2: fbBase = LCD_WIDTH * LCD_HEIGHT - 1; fbDx = -1; fbDy = -LCD_WIDTH; break;
     case 3: fbBase = (LCD_HEIGHT - 1) * LCD_WIDTH; fbDx = -LCD_WIDTH; fbDy = 1; break;
@@ -301,6 +429,7 @@ static void showToast(const char *text) {
 
 static void sensorTask(void *) {
   static float frame[SENSOR_PIXELS];
+  uint32_t batteryPolledAt = 0;
   for (;;) {
     const int rc = mlx.getFrame(frame);  // reads both sub-pages
     if (rc == 0) {
@@ -314,6 +443,13 @@ static void sensorTask(void *) {
       vTaskDelay(pdMS_TO_TICKS(50));
     }
     pollPowerKey();
+    pollTouch();
+    pollImu();
+    if (millis() - batteryPolledAt >= 2000) {
+      batteryPolledAt = millis();
+      pollBattery();
+    }
+    if (powerOffRequested) powerOffNow();
     vTaskDelay(1);
   }
 }
@@ -353,7 +489,7 @@ static void startSensor() {
   mlx.setResolution(MLX90640_ADC_18BIT);
   mlx.setRefreshRate(SENSOR_REFRESH);
 
-  xTaskCreatePinnedToCore(sensorTask, "thermal", 16384, nullptr, 2, nullptr, 0);
+  xTaskCreatePinnedToCore(sensorTask, "thermal", 16384, nullptr, 2, &sensorTaskHandle, 0);
 }
 
 // ============================================================================
@@ -484,8 +620,8 @@ static void drawCrosshair(int16_t cx, int16_t cy) {
 
 static void drawHotspot(int idx) {
   int col = idx % SENSOR_W, row = idx / SENSOR_W;
-  if (MIRROR_IMAGE) col = SENSOR_W - 1 - col;
-  if (FLIP_IMAGE) row = SENSOR_H - 1 - row;
+  if (imgMirror) col = SENSOR_W - 1 - col;
+  if (imgFlip) row = SENSOR_H - 1 - row;
   const int16_t cx = imgX + col * imgScale + imgScale / 2;
   const int16_t cy = imgY + row * imgScale + imgScale / 2;
   gfx->drawCircle(cx, cy, 9, COLOR_BLACK);
@@ -493,7 +629,66 @@ static void drawHotspot(int idx) {
   gfx->drawCircle(cx, cy, 7, COLOR_BLACK);
 }
 
-static void drawOverlays(const FrameStats &s, bool withToast) {
+// Battery level with a bolt while charging, or "USB" when there is no battery.
+// Right-aligned at `right`.
+static void drawBattery(int16_t right, int16_t y) {
+  if (!battKnown) return;
+  const bool present = battPresent;
+  const int pct = battPercent;
+  const bool bolt = battCharging || !present;
+  char txt[6];
+  if (!present) {
+    strcpy(txt, "USB");
+  } else if (pct < 0) {
+    strcpy(txt, "--%");
+  } else {
+    snprintf(txt, sizeof(txt), "%d%%", pct);
+  }
+  const int16_t w = 6 + (bolt ? 14 : 0) + (present ? 33 : 0) + strlen(txt) * 12 + 6;
+  int16_t x = right - w;
+  gfx->fillRect(x, y, w, 28, COLOR_BLACK);
+  x += 6;
+  if (bolt) {
+    gfx->fillTriangle(x + 7, y + 4, x, y + 15, x + 5, y + 15, COLOR_YELLOW);
+    gfx->fillTriangle(x + 4, y + 13, x + 10, y + 13, x + 3, y + 24, COLOR_YELLOW);
+    x += 14;
+  }
+  if (present) {
+    gfx->drawRect(x, y + 7, 26, 14, COLOR_WHITE);
+    gfx->fillRect(x + 26, y + 11, 3, 6, COLOR_WHITE);
+    const int16_t fill = (22 * max(0, min(pct, 100)) + 50) / 100;
+    if (fill > 0) gfx->fillRect(x + 2, y + 9, fill, 10, pct > 50 ? COLOR_GREEN : pct > 20 ? COLOR_YELLOW : COLOR_RED);
+    x += 33;
+  }
+  gfx->setTextSize(2);
+  gfx->setTextColor(COLOR_WHITE);
+  gfx->setCursor(x, y + 6);
+  gfx->print(txt);
+}
+
+static bool willPowerOff() { return pmuFound && battKnown && battPresent && !vbusPresent; }
+
+static void drawIdleWarning(uint32_t msLeft) {
+  char line1[24];
+  snprintf(line1, sizeof(line1), "%s in %u", willPowerOff() ? "Turning off" : "Screen off",
+           (unsigned)((msLeft + 999) / 1000));
+  static const char line2[] = "Tap screen to keep using";
+  const int16_t w = max<int16_t>(strlen(line1) * 18, strlen(line2) * 12) + 32;
+  const int16_t h = 14 + 24 + 12 + 16 + 14;
+  const int16_t x = imgX + (imgW - w) / 2, y = imgY + (imgH - h) / 2;
+  gfx->fillRect(x, y, w, h, COLOR_BLACK);
+  gfx->drawRect(x, y, w, h, COLOR_WHITE);
+  gfx->setTextColor(COLOR_WHITE);
+  gfx->setTextSize(3);
+  gfx->setCursor(x + (w - strlen(line1) * 18) / 2, y + 14);
+  gfx->print(line1);
+  gfx->setTextSize(2);
+  gfx->setCursor(x + (w - strlen(line2) * 12) / 2, y + 14 + 24 + 12);
+  gfx->print(line2);
+}
+
+// forCapture leaves out the battery, notices and countdown.
+static void drawOverlays(const FrameStats &s, bool forCapture) {
   if (s.maxT - s.minT >= 1.0f) drawHotspot(s.maxIdx);
   drawCrosshair(imgX + imgW / 2, imgY + imgH / 2);
 
@@ -504,16 +699,20 @@ static void drawOverlays(const FrameStats &s, bool withToast) {
   gfx->fillRect(boxX, boxY, w + 12, 34, COLOR_BLACK);
   drawTemp(boxX + 6, boxY + 6, s.centerT, 3, COLOR_WHITE);
 
-  // Notices (palette, units, saved picture), top-right.
-  if (withToast && (int32_t)(toastUntil - millis()) > 0) {
-    const int16_t tw = strlen(toastText) * 12;
-    const int16_t boxRight = min<int16_t>(imgX + imgW - 6, scrW - cornerInset(boxY) - EDGE_PAD);
-    const int16_t tx = boxRight - 6 - tw;
-    gfx->fillRect(tx - 6, boxY, tw + 12, 28, COLOR_BLACK);
-    gfx->setTextSize(2);
-    gfx->setTextColor(COLOR_WHITE);
-    gfx->setCursor(tx, boxY + 6);
-    gfx->print(toastText);
+  if (!forCapture) {
+    // Battery top-right; notices (palette, units, saved picture) under it.
+    drawBattery(min<int16_t>(imgX + imgW - 6, scrW - cornerInset(boxY) - EDGE_PAD), boxY);
+    if ((int32_t)(toastUntil - millis()) > 0) {
+      const int16_t toastY = boxY + 34;
+      const int16_t tw = strlen(toastText) * 12;
+      const int16_t tx = min<int16_t>(imgX + imgW - 6, scrW - cornerInset(toastY) - EDGE_PAD) - 6 - tw;
+      gfx->fillRect(tx - 6, toastY, tw + 12, 28, COLOR_BLACK);
+      gfx->setTextSize(2);
+      gfx->setTextColor(COLOR_WHITE);
+      gfx->setCursor(tx, toastY + 6);
+      gfx->print(toastText);
+    }
+    if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs);
   }
 
   // Scale bar: min | palette | max.
@@ -600,10 +799,10 @@ static bool writeBmp(File &f) {
 static bool writeCsv(File &f, const float *t) {
   char line[SENSOR_W * 9 + 2];
   for (int r = 0; r < SENSOR_H; r++) {
-    const int sr = FLIP_IMAGE ? SENSOR_H - 1 - r : r;
+    const int sr = imgFlip ? SENSOR_H - 1 - r : r;
     int len = 0;
     for (int c = 0; c < SENSOR_W; c++) {
-      const int sc = MIRROR_IMAGE ? SENSOR_W - 1 - c : c;
+      const int sc = imgMirror ? SENSOR_W - 1 - c : c;
       len += snprintf(line + len, sizeof(line) - len, c ? ",%.2f" : "%.2f", t[sr * SENSOR_W + sc]);
     }
     line[len++] = '\n';
@@ -647,11 +846,72 @@ static void saveCapture(const float *temps) {
 }
 
 // ============================================================================
+//  Rotation and auto-off
+// ============================================================================
+
+static void applyRotation(uint8_t r) {
+  currentRot = r;
+  gfx->setRotation(r);
+  setupLayout();
+  screenDirty = true;
+}
+
+static void sleepScreen() {
+  screenAsleep = true;
+  idleWarnLeftMs = 0;
+  panel->setBrightness(0);
+  panel->displayOff();
+}
+
+static void wakeScreen() {
+  screenAsleep = false;
+  panel->displayOn();
+  panel->setBrightness(SCREEN_BRIGHTNESS);
+  screenDirty = true;
+}
+
+static void noteActivity() {
+  lastActivityMs = millis();
+  if (screenAsleep) wakeScreen();
+}
+
+// On battery the board powers off (PWR turns it back on). On USB power only
+// the screen goes off: with USB power present the power chip may switch
+// straight back on.
+static void turnOff() {
+  if (willPowerOff()) {
+    showMessage("Turning off", "Press PWR to turn on.");
+    delay(1000);
+    panel->setBrightness(0);
+    if (sensorTaskHandle) {
+      powerOffRequested = true;  // the sensor task owns the I2C bus
+    } else {
+      powerOffNow();
+    }
+    delay(3000);
+    powerOffRequested = false;  // still running: USB power must have appeared
+  }
+  sleepScreen();
+}
+
+static void manageIdle() {
+  idleWarnLeftMs = 0;
+  if (screenAsleep || IDLE_OFF_SECONDS <= 0) return;
+  const uint32_t idle = millis() - lastActivityMs;
+  const uint32_t limit = IDLE_OFF_SECONDS * 1000UL;
+  if (idle >= limit) {
+    turnOff();
+  } else if (idle + IDLE_WARNING_SECONDS * 1000UL >= limit) {
+    idleWarnLeftMs = limit - idle;
+  }
+}
+
+// ============================================================================
 //  Button
 // ============================================================================
 
 static void pollButton() {
-  static bool wasDown = false, holdHandled = false;
+  static bool wasDown = false, holdHandled = false, wakePress = false;
   static uint32_t downSince = 0;
   const bool down = digitalRead(BOOT_BUTTON) == LOW;
   const uint32_t now = millis();
@@ -659,6 +919,12 @@ static void pollButton() {
   if (down && !wasDown) {
     downSince = now;
     holdHandled = false;
+    wakePress = screenAsleep;  // a press that wakes the screen does nothing else
+    noteActivity();
+  }
+  if (wakePress) {
+    wasDown = down;
+    return;
   }
   if (down && !holdHandled && now - downSince >= 700) {
     holdHandled = true;
@@ -690,7 +956,14 @@ void setup() {
   paletteIdx = prefs.getUChar("palette", 0) % PALETTE_COUNT;
   fahrenheit = prefs.getBool("fahrenheit", START_IN_FAHRENHEIT);
 
-  initPowerKey();
+  initPower();
+  pollBattery();
+  initTouch();
+  initImu();
+  for (int i = 0; i < 3; i++) pollImu();  // start the right way up
+  if (wantedRot != currentRot) applyRotation(wantedRot);
+  if (!mountSd()) Serial.println("No SD card");
+  lastActivityMs = millis();
   startSensor();
 }
 
@@ -699,11 +972,31 @@ void loop() {
   static uint32_t lastFrameAt = millis();
   static bool stallShown = false;
   static uint32_t statsAt = millis(), statsFrames = 0;
+  static bool captureRequested = false;
+  static bool hadVbus = vbusPresent;
 
   pollButton();
+  if (touchSeen) {
+    touchSeen = false;
+    noteActivity();
+  }
+  if (powerKeyPressed) {
+    powerKeyPressed = false;
+    if (!screenAsleep) captureRequested = true;  // a press that wakes the screen doesn't capture
+    noteActivity();
+  }
+  if (vbusPresent != hadVbus) {  // USB power plugged in or out
+    hadVbus = vbusPresent;
+    noteActivity();
+  }
+  if (wantedRot != currentRot) {
+    applyRotation(wantedRot);
+    noteActivity();
+  }
+  manageIdle();
 
   if (!takeFrame(temps)) {
-    if (!stallShown && millis() - lastFrameAt > 3000) {
+    if (!stallShown && !screenAsleep && millis() - lastFrameAt > 3000) {
       stallShown = true;
       char err[48] = "";
       if (sensorErrorCount) snprintf(err, sizeof(err), "\n(read error %d)", lastSensorError);
@@ -720,17 +1013,19 @@ void loop() {
   if (!isfinite(s.minT)) return;  // nothing valid in this frame
   updateRange(s);
 
-  const bool capture = powerKeyPressed;
-  if (capture) powerKeyPressed = false;
+  if (screenAsleep) return;
 
   if (screenDirty) {
     gfx->fillScreen(COLOR_BLACK);
     screenDirty = false;
   }
   drawThermalImage(temps, rangeLo, rangeHi);
-  drawOverlays(s, !capture);  // keep notices out of saved pictures
+  drawOverlays(s, captureRequested);
   gfx->flush();
-  if (capture) saveCapture(temps);
+  if (captureRequested) {
+    captureRequested = false;
+    saveCapture(temps);
+  }
 
   statsFrames++;
   if (millis() - statsAt >= 5000) {
