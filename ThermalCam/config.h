@@ -32,6 +32,9 @@
 
 // ---- Display ---------------------------------------------------------------
 #define SCREEN_BRIGHTNESS 200   // 0-255
+// Radius of the screen's rounded corners, in pixels. Text near the corners is
+// moved inward to clear them. Raise it if corner text is still clipped.
+#define SCREEN_CORNER_RADIUS 48
 #define START_IN_FAHRENHEIT false
 
 // The color scale always stretches over at least this many degrees C. This

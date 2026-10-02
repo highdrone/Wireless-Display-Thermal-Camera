@@ -15,12 +15,23 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 
 ## Controls
 
-| BOOT button | Action |
+| Button | Action |
 | --- | --- |
-| Short press | Next palette: Ironbow → Rainbow → Hot → White hot → Black hot |
-| Hold (~1 s) | Switch between °C and °F |
+| BOOT, short press | Next palette: Ironbow → Rainbow → Hot → White hot → Black hot |
+| BOOT, hold (~1 s) | Switch between °C and °F |
+| PWR, short press | Save a picture to the microSD card |
+| PWR, long press | Turn the board off (handled by the power chip itself) |
 
 The board remembers your palette and unit choice after power-off.
+
+## Saving pictures
+
+Put a FAT32-formatted microSD card in the slot. Each short press of **PWR** saves two files into a `thermal` folder on the card:
+
+- `IMG_0001.bmp`: the screen exactly as shown, with the readings and color scale (448×368 pixels).
+- `IMG_0001.csv`: the 32×24 temperatures in °C, laid out like the picture. It opens in Excel or Numbers.
+
+The top-right corner briefly shows **Saved IMG_0001**. If no card is found, it shows **No SD card**. Numbering continues from the last picture, even after power-off.
 
 ## 1. Check which sensor you have
 
@@ -85,11 +96,14 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8, Adafruit MLX9064
 | `MIRROR_IMAGE` | true | Flip the picture left/right. True is correct with the sensor pointing away from you. |
 | `FLIP_IMAGE` | false | Turn the picture upside down |
 | `SCREEN_BRIGHTNESS` | 200 | 0-255 |
+| `SCREEN_CORNER_RADIUS` | 48 | Size of the screen's rounded corners in pixels. Text near the corners moves inward to clear them. |
 | `START_IN_FAHRENHEIT` | false | Starting unit (the BOOT button overrides it) |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |
 
 ## Troubleshooting
 
+- **"No SD card" when saving:** the card must be microSD, formatted FAT32 (cards of 32 GB or less come that way). Push it in until it clicks.
+- **Corner text still clipped:** raise `SCREEN_CORNER_RADIUS` in `config.h`.
 - **"Sensor not found" on screen:** the screen lists every I2C address it can see.
   - Other devices listed but no `0x33`: the bus works, but the sensor isn't connected. Check VCC/GND and that SDA/SCL aren't swapped.
   - `none`: the pins in `config.h` don't match where you soldered.

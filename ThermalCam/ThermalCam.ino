@@ -3,6 +3,8 @@
 // revisions (SH8601 + FT3168, and V2 with CO5300 + CST820).
 //
 // BOOT button: short press = next color palette, hold = switch C / F.
+// PWR button: short press = save a picture (BMP) and temperatures (CSV) to the
+// microSD card.
 //
 // Libraries (Arduino Library Manager):
 //   "GFX Library for Arduino" by Moon On Our Nation
@@ -12,6 +14,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Preferences.h>
+#include <SD_MMC.h>
 #include <Arduino_GFX_Library.h>
 #include <Adafruit_MLX90640.h>
 
@@ -30,9 +33,16 @@
 #define BOARD_SDA 15
 #define BOARD_SCL 14
 #define BOOT_BUTTON 0
+#define SD_CLK 2
+#define SD_CMD 1
+#define SD_D0 3
 
 #define TCA9554_ADDR 0x20  // IO expander; EXIO0-2 are display/touch reset lines
 #define FT3168_ADDR 0x38   // touch chip on the original board (SH8601 panel)
+#define AXP2101_ADDR 0x34  // power chip; the PWR button is wired to it
+#define AXP2101_INTEN2 0x41   // IRQ enable 2
+#define AXP2101_INTSTS2 0x49  // IRQ status 2, write 1 to clear
+#define AXP2101_PKEY_SHORT 0x08  // bit 3 of both: PWR button short press
 
 #define SENSOR_W 32
 #define SENSOR_H 24
@@ -40,6 +50,7 @@
 #define BAR_H 32                   // height of the scale bar under the picture
 #define SCREEN_ROT (SCREEN_ROTATION & 3)
 #define DEDICATED_BUS_HZ 800000    // ESP32-S3 I2C tops out around 800 kHz
+#define EDGE_PAD 4                 // gap between text and the screen's curved edge
 
 static const bool SENSOR_ON_BOARD_BUS = (THERMAL_SDA == BOARD_SDA && THERMAL_SCL == BOARD_SCL);
 
@@ -76,6 +87,9 @@ static const char *boardName = "?";
 static char toastText[24] = "";
 static uint32_t toastUntil = 0;
 static bool screenDirty = true;  // a message screen left text outside the picture
+static bool pmuFound = false;
+static volatile bool powerKeyPressed = false;  // set by the sensor task
+static bool sdMounted = false;
 
 struct FrameStats {
   float minT, maxT, centerT;
@@ -131,6 +145,29 @@ static void resetDisplayAndTouch() {
   delay(20);
   i2cWriteReg(TCA9554_ADDR, 0x01, out | 0x07);
   delay(100);
+}
+
+// Have the power chip latch PWR button short presses so we can poll for them.
+static void initPowerKey() {
+  uint8_t en;
+  if (!i2cReadReg(AXP2101_ADDR, AXP2101_INTEN2, en)) {
+    Serial.println("Power chip not found, PWR button capture disabled");
+    return;
+  }
+  i2cWriteReg(AXP2101_ADDR, AXP2101_INTSTS2, AXP2101_PKEY_SHORT);  // drop any old press
+  i2cWriteReg(AXP2101_ADDR, AXP2101_INTEN2, en | AXP2101_PKEY_SHORT);
+  pmuFound = true;
+}
+
+// Runs on the sensor task: once it starts, it is the only user of the board's
+// I2C bus, so the PMU reads can't interleave with sensor reads.
+static void pollPowerKey() {
+  uint8_t st;
+  if (!pmuFound || !i2cReadReg(AXP2101_ADDR, AXP2101_INTSTS2, st)) return;
+  if (st & AXP2101_PKEY_SHORT) {
+    i2cWriteReg(AXP2101_ADDR, AXP2101_INTSTS2, AXP2101_PKEY_SHORT);
+    powerKeyPressed = true;
+  }
 }
 
 // ============================================================================
@@ -215,12 +252,28 @@ static void setupLayout() {
   }
 }
 
+// How far in from the left/right edge text must start to clear the screen's
+// rounded corners, for text whose nearest row is fromEdge pixels from the top
+// or bottom edge.
+static int16_t cornerInset(int16_t fromEdge) {
+  const float r = SCREEN_CORNER_RADIUS;
+  if (fromEdge >= r) return 0;
+  if (fromEdge < 0) fromEdge = 0;
+  const float dy = r - fromEdge;
+  return (int16_t)ceilf(r - sqrtf(r * r - dy * dy));
+}
+
+// Left margin for a text row spanning y .. y + h - 1.
+static int16_t textMargin(int16_t y, int16_t h) {
+  return cornerInset(min<int16_t>(y, scrH - (y + h))) + EDGE_PAD;
+}
+
 // Full-screen text message, one line per '\n'.
 static void showMessage(const char *title, const String &body) {
   gfx->fillScreen(COLOR_BLACK);
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(3);
-  gfx->setCursor(16, 24);
+  gfx->setCursor(max<int16_t>(16, textMargin(24, 24)), 24);
   gfx->print(title);
   gfx->setTextSize(2);
   int16_t y = 76;
@@ -228,7 +281,7 @@ static void showMessage(const char *title, const String &body) {
   while (start <= (int)body.length()) {
     int end = body.indexOf('\n', start);
     if (end < 0) end = body.length();
-    gfx->setCursor(16, y);
+    gfx->setCursor(max<int16_t>(16, textMargin(y, 16)), y);
     gfx->print(body.substring(start, end));
     y += 24;
     start = end + 1;
@@ -260,6 +313,7 @@ static void sensorTask(void *) {
       sensorErrorCount = sensorErrorCount + 1;
       vTaskDelay(pdMS_TO_TICKS(50));
     }
+    pollPowerKey();
     vTaskDelay(1);
   }
 }
@@ -439,39 +493,157 @@ static void drawHotspot(int idx) {
   gfx->drawCircle(cx, cy, 7, COLOR_BLACK);
 }
 
-static void drawOverlays(const FrameStats &s) {
+static void drawOverlays(const FrameStats &s, bool withToast) {
   if (s.maxT - s.minT >= 1.0f) drawHotspot(s.maxIdx);
   drawCrosshair(imgX + imgW / 2, imgY + imgH / 2);
 
-  // Center reading, top-left of the picture.
+  // Center reading, top-left of the picture, clear of the rounded corner.
+  const int16_t boxY = imgY + 8;
+  const int16_t boxX = max<int16_t>(imgX + 6, cornerInset(boxY) + EDGE_PAD);
   const int16_t w = drawTemp(0, 0, s.centerT, 3, COLOR_WHITE, false);
-  gfx->fillRect(imgX + 6, imgY + 6, w + 12, 34, COLOR_BLACK);
-  drawTemp(imgX + 12, imgY + 12, s.centerT, 3, COLOR_WHITE);
+  gfx->fillRect(boxX, boxY, w + 12, 34, COLOR_BLACK);
+  drawTemp(boxX + 6, boxY + 6, s.centerT, 3, COLOR_WHITE);
 
-  // Palette / unit change notice, top-right.
-  if ((int32_t)(toastUntil - millis()) > 0) {
+  // Notices (palette, units, saved picture), top-right.
+  if (withToast && (int32_t)(toastUntil - millis()) > 0) {
     const int16_t tw = strlen(toastText) * 12;
-    const int16_t tx = imgX + imgW - tw - 12;
-    gfx->fillRect(tx - 6, imgY + 6, tw + 12, 28, COLOR_BLACK);
+    const int16_t boxRight = min<int16_t>(imgX + imgW - 6, scrW - cornerInset(boxY) - EDGE_PAD);
+    const int16_t tx = boxRight - 6 - tw;
+    gfx->fillRect(tx - 6, boxY, tw + 12, 28, COLOR_BLACK);
     gfx->setTextSize(2);
     gfx->setTextColor(COLOR_WHITE);
-    gfx->setCursor(tx, imgY + 12);
+    gfx->setCursor(tx, boxY + 6);
     gfx->print(toastText);
   }
 
   // Scale bar: min | palette | max.
   const int16_t y0 = scrH - BAR_H;
   const int16_t textY = y0 + (BAR_H - 16) / 2;
+  const int16_t sideX = textMargin(textY, 16);
   gfx->fillRect(0, y0, scrW, BAR_H, COLOR_BLACK);
-  drawTemp(6, textY, s.minT, 2, COLOR_WHITE);
+  drawTemp(sideX, textY, s.minT, 2, COLOR_WHITE);
   const int16_t maxW = drawTemp(0, 0, s.maxT, 2, COLOR_WHITE, false);
-  drawTemp(scrW - 6 - maxW, textY, s.maxT, 2, COLOR_WHITE);
+  drawTemp(scrW - sideX - maxW, textY, s.maxT, 2, COLOR_WHITE);
 
-  const int16_t gx0 = 6 + 96, gx1 = scrW - 6 - 96;  // fixed, so it doesn't jump around
+  // Fixed position, so it doesn't jump around. 80 px fits "-40.0°F" and "572.0°F".
+  const int16_t gx0 = sideX + 80 + 10, gx1 = scrW - sideX - 80 - 10;
   const uint16_t *lut = paletteLut[paletteIdx];
   for (int16_t x = gx0; x < gx1; x++) {
     gfx->drawFastVLine(x, y0 + 10, BAR_H - 20, lut[(x - gx0) * 255 / (gx1 - gx0 - 1)]);
   }
+}
+
+// ============================================================================
+//  Saving pictures to the microSD card
+// ============================================================================
+
+static bool mountSd() {
+  if (sdMounted) return true;
+  SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
+  if (!SD_MMC.begin("/sdcard", true)) return false;  // 1-bit bus
+  if (SD_MMC.cardType() == CARD_NONE) {
+    SD_MMC.end();
+    return false;
+  }
+  SD_MMC.mkdir("/thermal");
+  sdMounted = true;
+  return true;
+}
+
+static void put16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
+static void put32(uint8_t *p, uint32_t v) { put16(p, v); put16(p + 2, v >> 16); }
+
+// The screen exactly as shown (picture, readings and scale), as a 24-bit BMP.
+static bool writeBmp(File &f) {
+  const uint32_t rowBytes = (scrW * 3 + 3) & ~3u;
+  const uint32_t imageBytes = rowBytes * scrH;
+  uint8_t hdr[54] = {'B', 'M'};
+  put32(hdr + 2, sizeof(hdr) + imageBytes);
+  put32(hdr + 10, sizeof(hdr));
+  put32(hdr + 14, 40);  // BITMAPINFOHEADER
+  put32(hdr + 18, scrW);
+  put32(hdr + 22, scrH);
+  put16(hdr + 26, 1);
+  put16(hdr + 28, 24);
+  put32(hdr + 34, imageBytes);
+  put32(hdr + 38, 2835);  // 72 dpi
+  put32(hdr + 42, 2835);
+  if (f.write(hdr, sizeof(hdr)) != sizeof(hdr)) return false;
+
+  const int rowsPerWrite = 16;
+  uint8_t *buf = (uint8_t *)malloc(rowBytes * rowsPerWrite);
+  if (!buf) return false;
+  const uint16_t *fb = gfx->getFramebuffer();
+  bool ok = true;
+  int rows = 0;
+  for (int y = scrH - 1; y >= 0 && ok; y--) {  // BMP rows go bottom-up
+    uint8_t *p = buf + rows * rowBytes;
+    int32_t idx = fbBase + y * fbDy;
+    for (int x = 0; x < scrW; x++, idx += fbDx) {
+      const uint16_t c = fb[idx];
+      const uint8_t r = c >> 11, g = (c >> 5) & 0x3F, b = c & 0x1F;
+      *p++ = (b << 3) | (b >> 2);
+      *p++ = (g << 2) | (g >> 4);
+      *p++ = (r << 3) | (r >> 2);
+    }
+    memset(p, 0, rowBytes - scrW * 3);
+    if (++rows == rowsPerWrite || y == 0) {
+      ok = f.write(buf, rows * rowBytes) == rows * rowBytes;
+      rows = 0;
+    }
+  }
+  free(buf);
+  return ok;
+}
+
+// The 32x24 temperatures in degrees C, oriented like the picture.
+static bool writeCsv(File &f, const float *t) {
+  char line[SENSOR_W * 9 + 2];
+  for (int r = 0; r < SENSOR_H; r++) {
+    const int sr = FLIP_IMAGE ? SENSOR_H - 1 - r : r;
+    int len = 0;
+    for (int c = 0; c < SENSOR_W; c++) {
+      const int sc = MIRROR_IMAGE ? SENSOR_W - 1 - c : c;
+      len += snprintf(line + len, sizeof(line) - len, c ? ",%.2f" : "%.2f", t[sr * SENSOR_W + sc]);
+    }
+    line[len++] = '\n';
+    if (f.write((const uint8_t *)line, len) != (size_t)len) return false;
+  }
+  return true;
+}
+
+static void saveCapture(const float *temps) {
+  if (!mountSd()) {
+    showToast("No SD card");
+    return;
+  }
+  uint16_t n = prefs.getUShort("shot", 1);
+  char bmpPath[32], csvPath[32];
+  for (;; n++) {
+    snprintf(bmpPath, sizeof(bmpPath), "/thermal/IMG_%04u.bmp", n);
+    if (!SD_MMC.exists(bmpPath)) break;
+  }
+  snprintf(csvPath, sizeof(csvPath), "/thermal/IMG_%04u.csv", n);
+
+  File bmp = SD_MMC.open(bmpPath, FILE_WRITE);
+  bool ok = bmp && writeBmp(bmp);
+  if (bmp) bmp.close();
+  File csv = ok ? SD_MMC.open(csvPath, FILE_WRITE) : File();
+  ok = ok && csv && writeCsv(csv, temps);
+  if (csv) csv.close();
+
+  if (!ok) {
+    Serial.printf("Writing %s failed\n", bmpPath);
+    SD_MMC.end();  // remount next time, in case the card was swapped
+    sdMounted = false;
+    showToast("SD write failed");
+    return;
+  }
+  prefs.putUShort("shot", n + 1);
+  Serial.printf("Saved %s and %s\n", bmpPath, csvPath);
+  char msg[24];
+  snprintf(msg, sizeof(msg), "Saved IMG_%04u", n);
+  showToast(msg);
 }
 
 // ============================================================================
@@ -518,6 +690,7 @@ void setup() {
   paletteIdx = prefs.getUChar("palette", 0) % PALETTE_COUNT;
   fahrenheit = prefs.getBool("fahrenheit", START_IN_FAHRENHEIT);
 
+  initPowerKey();
   startSensor();
 }
 
@@ -547,13 +720,17 @@ void loop() {
   if (!isfinite(s.minT)) return;  // nothing valid in this frame
   updateRange(s);
 
+  const bool capture = powerKeyPressed;
+  if (capture) powerKeyPressed = false;
+
   if (screenDirty) {
     gfx->fillScreen(COLOR_BLACK);
     screenDirty = false;
   }
   drawThermalImage(temps, rangeLo, rangeHi);
-  drawOverlays(s);
+  drawOverlays(s, !capture);  // keep notices out of saved pictures
   gfx->flush();
+  if (capture) saveCapture(temps);
 
   statsFrames++;
   if (millis() - statsAt >= 5000) {
