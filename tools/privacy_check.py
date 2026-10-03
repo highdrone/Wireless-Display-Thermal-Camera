@@ -10,6 +10,17 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+# Mandatory public upstream copyright contacts are not owner secrets. Accept only
+# exact reviewed notice bytes at these paths; no directory-wide exclusion.
+REVIEWED_UPSTREAM_NOTICES = {
+    "LICENSES/Newlib-notices.txt": "0681089a556e93791da82718d68011ba452de245f7f59c3846936304756ac0c0",
+    "LICENSES/Newlib-toolchain-notices.txt": "422aa40293093fb54fc66e692a0d68fd0b24ed5602e5d1d33ad05ba3909057e9",
+    "LICENSES/WPA-supplicant-notices.txt": "a87ac4e333d0f120408a9d814e40c3672cd27f365af89b4f2f6631f7a9338953",
+}
+
+def reviewed_upstream_notice(name, data):
+    return hashlib.sha256(data).hexdigest() == REVIEWED_UPSTREAM_NOTICES.get(name)
+
 RULES = {
     "home_path": rb"/(?:Users|home)/[A-Za-z0-9_.-]+/",
     "private_ip": rb"(?<![\d.])(?:192\.168(?:\.\d{1,3}){2}|10(?:\.\d{1,3}){3}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})(?![\d.])",
@@ -37,6 +48,7 @@ def main():
     result = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=ROOT, check=True, capture_output=True)
     paths = sorted(set(result.stdout.decode().strip("\0").split("\0")))
     issues = []
+    notices = []
     for name in paths:
         if not name:
             continue
@@ -44,9 +56,13 @@ def main():
         if path.is_symlink():
             issues.append({"type": "symlink_requires_review", "path": name, "count": 1})
             continue
-        for kind, digest in findings(path.read_bytes()):
+        data = path.read_bytes()
+        if reviewed_upstream_notice(name, data):
+            notices.append({"path": name, "sha256": hashlib.sha256(data).hexdigest(), "classification": "verbatim public upstream notice"})
+            continue
+        for kind, digest in findings(data):
             issues.append({"type": kind, "path": name, "count": 1, "sha256": digest})
-    print(json.dumps({"files": len(paths), "findings": issues, "scope": "tracked and nonignored worktree; no history/archive/entropy guarantee"}, indent=2))
+    print(json.dumps({"files": len(paths), "findings": issues, "reviewed_upstream_notices": notices, "scope": "tracked and nonignored worktree; no history/archive/entropy guarantee"}, indent=2))
     return bool(issues)
 
 if __name__ == "__main__":

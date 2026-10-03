@@ -50,15 +50,43 @@ class ProjectTests(unittest.TestCase):
         result = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=ROOT, input="\n".join(names) + "\n", text=True, capture_output=True)
         self.assertEqual(set(result.stdout.splitlines()), set(names))
 
-    def test_legacy_manifest(self):
+    def test_source_attested_manifest(self):
         manifest = json.loads((ROOT / "firmware/manifest.json").read_text())
         artifact = ROOT / "firmware" / manifest["file"]
         import hashlib
         self.assertEqual(hashlib.sha256(artifact.read_bytes()).hexdigest(), manifest["sha256"])
         self.assertEqual(artifact.stat().st_size, manifest["bytes"])
         self.assertEqual(manifest["flash_offset"], "0x0")
-        self.assertIsNone(manifest["source_commit"])
-        self.assertEqual(manifest["provenance"], "unverified legacy artifact")
+        self.assertRegex(manifest["source_commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(manifest["schema_version"], 2)
+        self.assertFalse(manifest["verification"]["hardware_tested"])
+        source_paths = set()
+        for entry in manifest["source_tree"]["files"]:
+            source_paths.add(entry["path"])
+            data = (ROOT / entry["path"]).read_bytes()
+            self.assertEqual(hashlib.sha256(data).hexdigest(), entry["sha256"])
+            self.assertEqual(len(data), entry["bytes"])
+            git_blob = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+            self.assertEqual(git_blob, entry["git_blob"])
+        actual = subprocess.check_output(["git", "ls-files", "ThermalCam"], cwd=ROOT, text=True).splitlines()
+        self.assertEqual(source_paths, set(actual))
+        # Works with depth-one CI: it does not need the preceding commit object.
+        tree = subprocess.check_output(["git", "rev-parse", "HEAD:ThermalCam"], cwd=ROOT, text=True).strip()
+        self.assertEqual(tree, manifest["source_tree"]["git_tree"])
+
+    def test_exact_upstream_notices(self):
+        import hashlib
+        notices = json.loads((ROOT / "LICENSES/upstream-manifest.json").read_text())
+        for entry in notices["files"]:
+            data = (ROOT / "LICENSES" / entry["file"]).read_bytes()
+            self.assertEqual(hashlib.sha256(data).hexdigest(), entry["sha256"])
+            self.assertEqual(len(data), entry["bytes"])
+        for name in privacy.REVIEWED_UPSTREAM_NOTICES:
+            data = (ROOT / name).read_bytes()
+            self.assertTrue(privacy.reviewed_upstream_notice(name, data))
+            self.assertFalse(privacy.reviewed_upstream_notice(name, data + b"modified"))
+            self.assertFalse(privacy.reviewed_upstream_notice("LICENSES/unreviewed.txt", data))
+            self.assertTrue(privacy.findings(data))
 
 if __name__ == "__main__":
     unittest.main()

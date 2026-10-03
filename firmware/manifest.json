@@ -1,12 +1,324 @@
 {
+  "schema_version": 2,
   "file": "ThermalCam-full-flash-at-0x0.bin",
-  "bytes": 1155072,
-  "sha256": "8cf0bc53a25bc20b4bbe698fb0024ef552ef7dff8ba177f0c8a7b527b96fef49",
+  "bytes": 16777216,
+  "sha256": "a2c0a4e43a25186448d71794e88cacdbf392497f3301813ef07890e6a023c930",
   "flash_offset": "0x0",
   "board": "Waveshare ESP32-S3-Touch-AMOLED-1.8 (V1 SH8601 / V2 CO5300)",
   "sensor": "MLX90640",
-  "provenance": "unverified legacy artifact",
-  "source_commit": null,
-  "toolchain": null,
-  "note": "Hash identifies existing bytes only. Neither source correspondence nor hardware behavior is certified. Build current source instead."
+  "provenance": "compiled from attested source; offline verified; no hardware test",
+  "source_commit": "824933755386262ea5472ff1e908bb8ddc78c97e",
+  "source_tree": {
+    "path": "ThermalCam",
+    "git_tree": "42e38bc67e21dac0417539ebf333fe9203ad3f26",
+    "files": [
+      {
+        "path": "ThermalCam/ThermalCam.cpp",
+        "git_blob": "248a283163c30cd0129676b3c397b29caf4b87c7",
+        "bytes": 55668,
+        "sha256": "ef3b3d3449777000b406d66af49eac9fdb3c4ca4aeca2876ab24723201a122ee"
+      },
+      {
+        "path": "ThermalCam/ThermalCam.ino",
+        "git_blob": "4e6e4aba19e26cda785f51f0162ab5cb53cc5cc1",
+        "bytes": 141,
+        "sha256": "675b1e292c019c697eb2d94022bc26c30aee1eaf5140e019021f627f76435fde"
+      },
+      {
+        "path": "ThermalCam/bmp_header.h",
+        "git_blob": "1225ef2082c503d36113e42eab7bb2b240dc0edb",
+        "bytes": 1382,
+        "sha256": "da776b9d017a121c7227fd96de947936ccf72d8d27fd0c193789f39a41793d92"
+      },
+      {
+        "path": "ThermalCam/config.h",
+        "git_blob": "b701768c2a65d3e1c31fd53051aefdc726937289",
+        "bytes": 3869,
+        "sha256": "4ff1748526057737c31c59af57d9344e75285593c0ea89af14010b3f8fafb337"
+      },
+      {
+        "path": "ThermalCam/palettes.h",
+        "git_blob": "0fe0862d07d253e5649d09a29d73f7ee4f7087af",
+        "bytes": 2049,
+        "sha256": "34b0faeb10fef848431ce63464e19012536b3d1ba9f4c825e36e25874356c886"
+      },
+      {
+        "path": "ThermalCam/src/mlx90640/LICENSE",
+        "git_blob": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64",
+        "bytes": 11357,
+        "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+      },
+      {
+        "path": "ThermalCam/src/mlx90640/MLX90640_API.c",
+        "git_blob": "fbe45fd26ce596e455311f36b215f20788174c05",
+        "bytes": 42050,
+        "sha256": "9ddb79f3ec59dac7b20c912511499b443a1da212600a0eb5a44229f6aa3a79ee"
+      },
+      {
+        "path": "ThermalCam/src/mlx90640/MLX90640_API.h",
+        "git_blob": "551bf3225e4d6feebb42e0d46ae721c07055df90",
+        "bytes": 5239,
+        "sha256": "6cf506c4b199d547f0d41cfa280456c34c91e2c0b7927900cd901f07e14467d6"
+      },
+      {
+        "path": "ThermalCam/src/mlx90640/MLX90640_I2C_Driver.cpp",
+        "git_blob": "555730856e37829356b7d5069818008c5461322e",
+        "bytes": 1964,
+        "sha256": "d5b045f2f42691731334dbba4da1ca5d6dc29db0c493f4b00aeb75ad605f33e6"
+      },
+      {
+        "path": "ThermalCam/src/mlx90640/MLX90640_I2C_Driver.h",
+        "git_blob": "005b195912fcc1ea3ac1021016ea2d88e6f61729",
+        "bytes": 1090,
+        "sha256": "9def89b1b656850a11fc24f8e1b93b33e0237ec969e44870b30d41bad19d79d3"
+      },
+      {
+        "path": "ThermalCam/src/mlx90640/README.md",
+        "git_blob": "8fec17d8bac0e753b0734d5daf5b55f0d1721e17",
+        "bytes": 382,
+        "sha256": "dd5a89761c2b593ce7ebd609700fbd161a2d1725ba4e3276ecde97a8d23beb55"
+      },
+      {
+        "path": "ThermalCam/src/mlx90640/mlx90640.h",
+        "git_blob": "cda3fae087af5a9d5d1579b281433ee175ef977c",
+        "bytes": 214,
+        "sha256": "c0258ac5500f75e6362d56a24654a647a2422f77bc7361505a8a8c812d610ebe"
+      }
+    ]
+  },
+  "build": {
+    "date": "2026-10-03",
+    "host": "macOS arm64",
+    "arduino_cli": "1.5.1",
+    "arduino_cli_sha256": "171f87fd64b4a3bdcfbc4493d8e72ea006bb6d572c69bfac6359b1ad3e494580",
+    "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi",
+    "source_date_epoch": 1791051543,
+    "jobs": 2,
+    "recipe": "firmware/BUILDING.md",
+    "local_environment": "env -i; minimal PATH; isolated HOME/TMPDIR; LANG=C; LC_ALL=C; TZ=UTC",
+    "path_maps": {
+      "source": "/src/esp32-thermal-camera",
+      "dependency_state": "/toolchain",
+      "build_output": "/build/output"
+    },
+    "platform_compiler_flags": "compiler.c.flags/compiler.cpp.flags retained, including -MMD -c; only extra_flags override",
+    "application_elf": {
+      "bytes": 18107164,
+      "sha256": "3d9a2b8f7131e1532d5099e24c086478ab92c19a14e0cd16e7e739c2588bd8a6"
+    },
+    "application": {
+      "bytes": 1087312,
+      "sha256": "5aed0a593677b9bdaab176e03188cf5f81022d7d7228ccbb69c4a7258f5c653b"
+    },
+    "repeat_build": {
+      "full_compiles": 2,
+      "separate_build_directories": true,
+      "separate_initially_empty_core_caches": true,
+      "elf_byte_identical": true,
+      "application_byte_identical": true,
+      "merged_byte_identical": true,
+      "scope": "same macOS arm64 host, pinned dependencies and fixed epoch; no cross-host guarantee"
+    },
+    "app_descriptor": {
+      "version": "6671d0b",
+      "project_name": "arduino-lib-builder",
+      "time": "21:14:44",
+      "date": "Sep 16 2026",
+      "idf_version": "v5.5.5"
+    },
+    "app_descriptor_note": "Inherited precompiled SDK project/version/time fields, not thermal source identity. Embedded ELF SHA-256 matches actual build ELF."
+  },
+  "dependencies": {
+    "esp32_core": {
+      "version": "3.3.12",
+      "source_commit": "94afccf35fb1e401facddbcf9e13bcf7c76a31d8",
+      "version_header_sha256": "6f4b870b061d0320c85e4f31595edde57f528f9ccdacd4f82faf41cbc490706b"
+    },
+    "esp_idf": {
+      "version": "5.5.5",
+      "source_commit": "b774170ff46c393eeb5e495ea37936038d3f4f4f"
+    },
+    "esp32s3_sdk": {
+      "version": "3.3.12",
+      "lib_builder_revision": "6671d0b",
+      "sdk_versions_note": "SDK versions.txt is the upstream precompiled-package inventory, not proof that every listed component is linked."
+    },
+    "xtensa_gcc": {
+      "version": "14.2.0",
+      "release": "esp-14.2.0_20260121",
+      "package": "esp-x32@2601"
+    },
+    "esptool": "5.3.1",
+    "arduino_gfx": {
+      "version": "1.6.8",
+      "source_commit": "2685a776495be1f9eaf8c572cf876469bcc56585",
+      "url": "https://codeload.github.com/moononournation/Arduino_GFX/zip/2685a776495be1f9eaf8c572cf876469bcc56585",
+      "archive_sha256": "22f7ade4bd0b5efc65380941418932723360780f1498721d06820b779fdd140b"
+    },
+    "melexis": {
+      "source_commit": "f6be7ca1d4a55146b705f3d347f84b773b29cc86",
+      "local_modifications": "documented include packaging and Arduino I2C adapter"
+    },
+    "relevant_package_archives": [
+      {
+        "archive": "esp32-core-3.3.12.zip",
+        "sha256": "87401004f279a206781e368b66098a8383b7cf87cce7811a6afd0163503fa78f",
+        "bytes": 51102895,
+        "url": "https://github.com/espressif/arduino-esp32/releases/download/3.3.12/esp32-core-3.3.12.zip",
+        "version": "3.3.12",
+        "name": "esp32"
+      },
+      {
+        "archive": "esp32s3-libs-3.3.12.zip",
+        "sha256": "08f4e7292fee97dc011dc64e3c670a9a4e83a6b52a604c4b9b18ab2885cdd092",
+        "bytes": 91711095,
+        "url": "https://github.com/espressif/arduino-esp32/releases/download/3.3.12/esp32s3-libs-3.3.12.zip",
+        "version": "3.3.12",
+        "name": "esp32s3-libs"
+      },
+      {
+        "archive": "xtensa-esp-elf-14.2.0_20260121-aarch64-apple-darwin.tar.gz",
+        "sha256": "763755178c15299f8d6f3c88b121f9f43d06be499f11be4a5de51bf3e75b3022",
+        "bytes": 326793686,
+        "url": "https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20260121/xtensa-esp-elf-14.2.0_20260121-aarch64-apple-darwin.tar.gz",
+        "version": "2601",
+        "name": "esp-x32"
+      },
+      {
+        "archive": "esptool-v5.3.1-macos-arm64.tar.gz",
+        "sha256": "f63f7203d88cfe4c17aea34d6cf82769458ce204e49a05816c6384c2d299e6ca",
+        "bytes": 61218014,
+        "url": "https://github.com/espressif/esptool/releases/download/v5.3.1/esptool-v5.3.1-macos-arm64.tar.gz",
+        "version": "5.3.1",
+        "name": "esptool_py"
+      },
+      {
+        "archive": "ctags-5.8-arduino11-pm-x86_64-apple-darwin.zip",
+        "sha256": "bf74807260ddf0e1fc94d67e9cd8a41b7c0a2f0bee03e254e6975139b37ef250",
+        "bytes": 118296,
+        "url": "https://downloads.arduino.cc/tools/ctags-5.8-arduino11-pm-x86_64-apple-darwin.zip",
+        "version": "5.8-arduino11",
+        "name": "ctags"
+      }
+    ]
+  },
+  "components": [
+    {
+      "role": "bootloader",
+      "build_file": "ThermalCam.ino.bootloader.bin",
+      "flash_offset": "0x0",
+      "bytes": 19968,
+      "sha256": "84bb365666003b051f564d04380d0cf5d9d85c420ddafe9fc863071b49e49bfc"
+    },
+    {
+      "role": "partition_table",
+      "build_file": "ThermalCam.ino.partitions.bin",
+      "flash_offset": "0x8000",
+      "bytes": 3072,
+      "sha256": "ace02503447d0f470692e65fa76002f2d77a92dc81cd3813d8aa66718d716da9"
+    },
+    {
+      "role": "boot_app0",
+      "build_file": "boot_app0.bin",
+      "flash_offset": "0xe000",
+      "bytes": 8192,
+      "sha256": "f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0"
+    },
+    {
+      "role": "application",
+      "build_file": "ThermalCam.ino.bin",
+      "flash_offset": "0x10000",
+      "bytes": 1087312,
+      "sha256": "5aed0a593677b9bdaab176e03188cf5f81022d7d7228ccbb69c4a7258f5c653b"
+    }
+  ],
+  "partitions": [
+    {
+      "label": "nvs",
+      "type": 1,
+      "subtype": 2,
+      "offset": "0x9000",
+      "bytes": 20480,
+      "flags": 0,
+      "all_ff": true,
+      "sha256": "1f55ffcddc1fce4d4ab43d09da1f8e58730a19bf3aadd78331c3eaaa8b9b4410"
+    },
+    {
+      "label": "otadata",
+      "type": 1,
+      "subtype": 0,
+      "offset": "0xe000",
+      "bytes": 8192,
+      "flags": 0
+    },
+    {
+      "label": "app0",
+      "type": 0,
+      "subtype": 16,
+      "offset": "0x10000",
+      "bytes": 3145728,
+      "flags": 0
+    },
+    {
+      "label": "app1",
+      "type": 0,
+      "subtype": 17,
+      "offset": "0x310000",
+      "bytes": 3145728,
+      "flags": 0,
+      "all_ff": true,
+      "sha256": "908b6cfc9aef496dd5ab5c5540d80c6383ed6e92f86044574c996315381bc064"
+    },
+    {
+      "label": "ffat",
+      "type": 1,
+      "subtype": 129,
+      "offset": "0x610000",
+      "bytes": 10354688,
+      "flags": 0,
+      "all_ff": true,
+      "sha256": "db2ad35d18eb178d03e1a724da0895c149d63ca7136c2c64ef7e9128ecd9ee21"
+    },
+    {
+      "label": "coredump",
+      "type": 1,
+      "subtype": 3,
+      "offset": "0xff0000",
+      "bytes": 65536,
+      "flags": 0,
+      "all_ff": true,
+      "sha256": "71189f7fb6aed638640078fba3a35fda6c39c8962e74dcc75935aac948da9063"
+    }
+  ],
+  "verification": {
+    "partition_table_md5_valid": true,
+    "esp_bootloader_and_app_checksums_and_sha256_valid": true,
+    "app_descriptor_matches_actual_elf_sha256": true,
+    "merged_ranges_match_all_four_inputs": true,
+    "all_other_merged_bytes_ff": true,
+    "nvs_all_ff": true,
+    "blank_partitions": [
+      "nvs",
+      "app1",
+      "ffat",
+      "coredump"
+    ],
+    "ota_data_note": "SDK boot_app0.bin is intentional, not blank device NVS.",
+    "hardware_tested": false,
+    "binary_privacy_scope": "raw, printable, UTF-16 LE/BE on both alignments and bounded offline scanners; no local home paths/private identities/emails/tokens/device MACs found; heuristic not proof of absence",
+    "entropy_classification": "independent release-review gate; compile/source attestation is not entropy certification"
+  },
+  "legacy": {
+    "replaced_current_sha256": "8cf0bc53a25bc20b4bbe698fb0024ef552ef7dff8ba177f0c8a7b527b96fef49",
+    "bytes": 1155072,
+    "source_correspondence": "unproven; no legacy bitwise reproduction claimed; earlier Git history untouched"
+  },
+  "limits": [
+    "No board access, flash, upload, serial or hardware test.",
+    "Default ESP-NOW is unauthenticated and unencrypted broadcast.",
+    "Current binary source mapping does not establish historical binary/source correspondence.",
+    "Two identical local builds are not a cross-machine or all-future-download reproducibility guarantee.",
+    "Manifest is an external source attestation; inherited SDK app-description fields alone are not source provenance.",
+    "Required notices and pinned source/rebuild references are retained; no complete binary license-compliance certification or exhaustive SBOM is claimed."
+  ]
 }

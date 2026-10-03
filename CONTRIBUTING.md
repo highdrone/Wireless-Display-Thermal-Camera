@@ -17,15 +17,16 @@ git diff --check
 
 The native tests require Python 3.9+ and a C++11 compiler with AddressSanitizer and
 UndefinedBehaviorSanitizer (Clang or GCC). They test malformed BMP headers,
-palette endpoints, default configuration, serial privacy, ignore rules and the
-legacy artifact checksum. They do not simulate the sensor, display, ESP-NOW,
-battery, SD card or power chip. CI performs these offline checks only; it does
+palette endpoints, default configuration, serial privacy, ignore rules,
+source-attested artifact hashes/structure and retained upstream notices. They do
+not simulate the sensor, display, ESP-NOW, battery, SD card or power chip. CI performs these offline checks only; it does
 not certify an ESP32 compile or hardware behavior.
 
 Follow the pinned build recipe in README. Record the source commit, exact core
-and library versions, complete FQBN/options and result in your PR. Do not commit
-build outputs. Report V1 and V2 hardware results separately; a successful compile
-is not a hardware test. Do not flash any device without its owner's permission.
+and library versions, complete FQBN/options and result in your PR. Keep generated
+logs, ELF/map, caches and captures private. Only a reviewed merged release image
+with updated source/dependency/hash manifest may be committed. Report V1 and V2
+hardware results separately; a successful compile is not a hardware test. Do not flash any device without its owner's permission.
 
 Keep the root MIT notice and all third-party notices. The bundled Melexis driver
 remains Apache-2.0; mark modifications to its files. Contributions to original

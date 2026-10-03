@@ -27,7 +27,7 @@
 *.bundle
 *.csv
 *.bmp
-# Explicit reviewed legacy image only; new binaries need a source mapping.
+# Explicit source-attested release image only; replacements need a new manifest.
 !/firmware/ThermalCam-full-flash-at-0x0.bin
 # Local credentials/configuration and machine-specific editor state
 .env

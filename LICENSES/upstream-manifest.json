@@ -1,0 +1,102 @@
+{
+  "scope": "Exact retained upstream notice texts and their sources; not an exhaustive linked-component SBOM. Public upstream copyright contacts must not be changed or confused with project-owner private contacts.",
+  "files": [
+    {
+      "file": "Arduino-ESP32-LGPL.txt",
+      "bytes": 26335,
+      "sha256": "62e54861b30e953735dc187f036917c588665dbe3c5dd88449e34317608bbf5e",
+      "source_url": "https://raw.githubusercontent.com/espressif/arduino-esp32/94afccf35fb1e401facddbcf9e13bcf7c76a31d8/LICENSE.md"
+    },
+    {
+      "file": "ESP-IDF-Apache-2.0.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/b774170ff46c393eeb5e495ea37936038d3f4f4f/LICENSE"
+    },
+    {
+      "file": "Espressif-PHY-license.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-phy-lib/59c1234e929212aec0fdda75769b759951235536/LICENSE"
+    },
+    {
+      "file": "Espressif-WiFi-license.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp32-wifi-lib/22bb3517b08760ed43b889013f8a122db0d46da0/LICENSE"
+    },
+    {
+      "file": "FreeRTOS-MIT.txt",
+      "bytes": 1036,
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/b774170ff46c393eeb5e495ea37936038d3f4f4f/components/freertos/FreeRTOS-Kernel/LICENSE.md"
+    },
+    {
+      "file": "GCC-GPL-3.0.txt",
+      "bytes": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "source_archive": "xtensa-esp-elf-14.2.0_20260121-aarch64-apple-darwin.tar.gz",
+      "source_archive_sha256": "763755178c15299f8d6f3c88b121f9f43d06be499f11be4a5de51bf3e75b3022",
+      "archive_member": "share/licenses/gcc/COPYING3"
+    },
+    {
+      "file": "GCC-Runtime-Library-Exception.txt",
+      "bytes": 3324,
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "source_archive": "xtensa-esp-elf-14.2.0_20260121-aarch64-apple-darwin.tar.gz",
+      "source_archive_sha256": "763755178c15299f8d6f3c88b121f9f43d06be499f11be4a5de51bf3e75b3022",
+      "archive_member": "share/licenses/gcc/COPYING.RUNTIME"
+    },
+    {
+      "file": "MbedTLS-license.txt",
+      "bytes": 29852,
+      "sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b",
+      "source_url": "https://raw.githubusercontent.com/espressif/mbedtls/9d669eadb1955d348986b9280156710aaaadf79f/LICENSE"
+    },
+    {
+      "file": "Newlib-notices.txt",
+      "bytes": 46295,
+      "sha256": "0681089a556e93791da82718d68011ba452de245f7f59c3846936304756ac0c0",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/b774170ff46c393eeb5e495ea37936038d3f4f4f/components/newlib/COPYING.NEWLIB"
+    },
+    {
+      "file": "Newlib-toolchain-notices.txt",
+      "bytes": 63318,
+      "sha256": "422aa40293093fb54fc66e692a0d68fd0b24ed5602e5d1d33ad05ba3909057e9",
+      "source_archive": "xtensa-esp-elf-14.2.0_20260121-aarch64-apple-darwin.tar.gz",
+      "source_archive_sha256": "763755178c15299f8d6f3c88b121f9f43d06be499f11be4a5de51bf3e75b3022",
+      "archive_member": "share/licenses/newlib/COPYING.NEWLIB"
+    },
+    {
+      "file": "Protobuf-C-BSD.txt",
+      "bytes": 1613,
+      "sha256": "b8999cb392cc5bbe8cd679de59584ad8d2f26033123e76f1d662fa14b9d4f287",
+      "source_url": "https://raw.githubusercontent.com/protobuf-c/protobuf-c/abc67a11c6db271bedbb9f58be85d6f4e2ea8389/LICENSE"
+    },
+    {
+      "file": "Tinycrypt-BSD.txt",
+      "bytes": 3254,
+      "sha256": "270e0b63ce74421f1ccaaf03f9c7daa430cdb16c9856259ca4c2e3c74880d589",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/b774170ff46c393eeb5e495ea37936038d3f4f4f/components/bt/common/tinycrypt/LICENSE"
+    },
+    {
+      "file": "WPA-supplicant-notices.txt",
+      "bytes": 965,
+      "sha256": "a87ac4e333d0f120408a9d814e40c3672cd27f365af89b4f2f6631f7a9338953",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/b774170ff46c393eeb5e495ea37936038d3f4f4f/components/wpa_supplicant/COPYING"
+    },
+    {
+      "file": "lwIP-BSD.txt",
+      "bytes": 1425,
+      "sha256": "ef4aac92e05e87cd1cdc140870ed52206ba03d4a7fe46c1e11d7ffa6c87d252b",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-lwip/fd432e4ee2cfb7f7f1c7eb7227e0173412e7b84e/COPYING"
+    },
+    {
+      "file": "FatFs-notice.txt",
+      "bytes": 944,
+      "sha256": "2bb0c0fbfbda95040387540e08f5f5bd811c9a4fc271a4ded940b69e3d868a45",
+      "source_url": "https://raw.githubusercontent.com/espressif/esp-idf/b774170ff46c393eeb5e495ea37936038d3f4f4f/components/fatfs/src/ff.c",
+      "note": "Verbatim leading notice block; source implementation not copied."
+    }
+  ]
+}

@@ -132,15 +132,20 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
 
 ## 3a. Quick flash (no Arduino needed, default settings)
 
-**Prefer building the current source.** The retained
-`firmware/ThermalCam-full-flash-at-0x0.bin` is an **unverified legacy artifact**,
-not a proven build of the current source; the new source privacy/parser fixes
-are not asserted to be present in it. See [firmware/README.md](firmware/README.md)
-and [firmware/manifest.json](firmware/manifest.json) for the exact hash, length
-and **0x0** merged-image offset. Verify the checksum before using it. A checksum
-is byte identity, not source provenance or safety certification. Flashing can
-replace stored device data; back up only to a private location. The instructions
-below are for an owner choosing to use the legacy image, not an audit test.
+`firmware/ThermalCam-full-flash-at-0x0.bin` is a new **source-attested build**
+of commit `824933755386262ea5472ff1e908bb8ddc78c97e`, using core **3.3.12**
+and GFX **1.6.8** with the parser hardening and private logging defaults.
+Two independent local compiles produced identical ELF, application and merged
+bytes. See [firmware/manifest.json](firmware/manifest.json) for provenance and
+[firmware/README.md](firmware/README.md) for the exact checksum and **0x0** offset.
+
+**No hardware test is claimed.** The image is a complete 16 MB flash layout,
+with blank NVS, FAT and coredump partitions; programming it replaces stored device settings/data.
+Back up existing device data only to a private location. A matching checksum
+proves byte identity, not hardware suitability or absence of every possible
+encoded secret. The older image's source correspondence remains unproven;
+Git history was not rewritten. Default ESP-NOW is still open broadcast.
+The following steps are owner-operated flashing instructions, not an audit test.
 
 1. Open <https://espressif.github.io/esptool-js/> in Chrome or Edge.
 2. Plug in the board and click **Connect**. If no port shows up, unplug, then hold **BOOT** while plugging the board back in.
@@ -151,12 +156,13 @@ below are for an owner choosing to use the legacy image, not an audit test.
 
 1. **Board support:** go to *File → Preferences → Additional boards manager URLs* and add
    `https://espressif.github.io/arduino-esp32/package_esp32_index.json`.
-   Then open *Boards Manager* and install **esp32 by Espressif Systems** (version 3.x).
-2. **Library:** in *Library Manager*, install **GFX Library for Arduino** (by Moon On Our Nation). The thermal sensor driver comes with the project, in `ThermalCam/src/mlx90640`.
+   Then open *Boards Manager* and install **esp32 by Espressif Systems** (**version 3.3.12**).
+2. **Library:** in *Library Manager*, install **GFX Library for Arduino 1.6.8** (by Moon On Our Nation). The thermal sensor driver comes with the project, in `ThermalCam/src/mlx90640`.
 3. **Board settings** (*Tools* menu):
    | Setting | Value |
    | --- | --- |
    | Board | ESP32S3 Dev Module |
+   | USB Mode | Hardware CDC and JTAG (`hwcdc`) |
    | USB CDC On Boot | Enabled |
    | Flash Size | 16MB (128Mb) |
    | Partition Scheme | 16M Flash (3MB APP/9.9MB FATFS) |
@@ -166,45 +172,43 @@ below are for an owner choosing to use the legacy image, not an audit test.
    Scene-temperature statistics and the unique sensor serial number are disabled
    by default. Only enable `LOG_THERMAL_STATS` / `LOG_SENSOR_SERIAL` for private debugging.
 
-The original README recorded esp32 core **3.3.12** with GFX Library for Arduino
-**1.6.8**. That historical claim is not a new hardware or binary-provenance
-certification. Pin both versions rather than silently using an arbitrary `3.x`.
+### Pinned release build (no upload)
 
-### Reproducible compile recipe (no upload)
+The complete October 3, 2026 build passed with Arduino CLI **1.5.1**, esp32 core
+**3.3.12**, ESP-IDF **5.5.5**, Xtensa GCC **14.2.0**, esptool **5.3.1** and GFX
+**1.6.8** (revision `2685a776495be1f9eaf8c572cf876469bcc56585`).
+The exact board options are:
 
-Install Arduino CLI, then use these exact dependency versions in your own
-Arduino data directory (these commands download dependencies; they do not flash):
-
-```sh
-arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-arduino-cli core install esp32:esp32@3.3.12 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-arduino-cli lib install "GFX Library for Arduino@1.6.8"
-arduino-cli compile --fqbn 'esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi' --build-path /tmp/thermal-camera-build ThermalCam
+```text
+esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi
 ```
 
-GFX 1.6.8 corresponds to upstream commit
-`2685a776495be1f9eaf8c572cf876469bcc56585`; the vendored Melexis driver revision
-is recorded in its own README. The sketch entry is `ThermalCam.ino`; implementation
-is ordinary `ThermalCam.cpp`, avoiding Arduino automatic prototype-generation
-differences. All existing wiring and UI/radio defaults are preserved.
+Use [firmware/BUILDING.md](firmware/BUILDING.md) for the **complete isolated
+install/neutral-path compile recipe and release gate**. It uses a private Arduino
+configuration/data/library/cache directory, fixed `SOURCE_DATE_EPOCH`, and
+prefix maps while retaining core `-MMD -c`/SDK flags. No global Arduino install
+needs changing. The sketch entry remains `ThermalCam.ino`, with ordinary C++
+implementation in `ThermalCam.cpp`; wiring/UI/radio/power defaults are preserved.
 
-Build outputs are private by default. Before distributing a binary, inspect
-embedded paths, IDs and strings; preserve required third-party licenses; record
-the exact source commit, core/library revisions, command, partition layout,
-flash offsets and SHA-256. Custom compiler flags must **preserve the platform's
-required defaults** (for example `-MMD -c` on core 3.0.0); prefix-map personal
-source/toolchain paths when preparing publishable artifacts. Do not mistake a
-standalone application `.bin` for a merged 0x0 image.
+Two full compiles in separate new output directories and separate initially
+empty core caches produced **byte-identical ELF, app, bootloader, partition,
+boot-app0 and merged images** on the same macOS arm64 host. This is a measured
+local repeatability result, not a cross-host or indefinite bitwise-reproducibility
+guarantee. The manifest records source commit/tree/files, relevant dependency
+archive hashes, actual ELF/app/merged SHA-256, verified offsets and blank NVS.
+Its preceding source commit avoids circular manifest self-reference.
 
-### Current verification limits
+### Verification limits
 
-The October 3, 2026 source check compiled the sketch and bundled Melexis
-translation units with the existing esp32 **3.0.0** toolchain, but the full build
-failed inside GFX 1.6.8: that old core lacks the required ESP-IDF parallel-display
-APIs (`dma_burst_size` / `esp_lcd_i80_alloc_draw_buffer`). **There is no successful
-full-firmware build or hardware test from that audit.** Core 3.3.12 is the pinned
-recipe above, not a newly certified build. Use the documented compatible
-versions; do not remove library code just to manufacture a successful build.
+There was **no board access, upload, serial session or hardware test**. Native
+parser/privacy tests and actual firmware compilation do not prove display,
+sensor, SD, radio or power behavior on hardware. The SDK's inherited application
+name/version/date are not thermal source identity; the embedded ELF hash matches
+the actual build, with the source mapping in the manifest. Only the newly rebuilt
+current binary has that mapping; older historical binaries remain source-unproven.
+Offline privacy checks are heuristic, and independent entropy/release review is
+separate from compilation. See [THIRD_PARTY.md](THIRD_PARTY.md) for retained
+notices and source/rebuild requirements; the complete binary is not solely MIT.
 
 ### Offline development checks
 
@@ -216,7 +220,8 @@ git diff --check
 
 Requires Python 3.9+ and Clang/GCC with C++11 and address/undefined-behavior
 sanitizers. Tests exercise malformed BMP headers, palette endpoints, privacy
-regressions, preserved defaults, ignore rules and the legacy manifest checksum.
+regressions, preserved defaults, ignore rules, source/notice hashes, current manifest checksum, merged components,
+image integrity, partition layout and blank NVS.
 CI runs these offline checks only; it does not build the ESP32 firmware or test
 a physical board. The worktree privacy checker does not replace a full Git
 history, compressed archive, binary or credential review. See [CONTRIBUTING.md](CONTRIBUTING.md).
