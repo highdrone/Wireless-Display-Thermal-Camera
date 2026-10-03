@@ -2,15 +2,14 @@
 // Waveshare ESP32-S3-Touch-AMOLED-1.8 (368x448 AMOLED). Works on both board
 // revisions (SH8601 + FT3168, and V2 with CO5300 + CST820).
 //
-// BOOT button: short press = next color palette, hold = switch C / F.
-// PWR button: short press = save a picture (BMP) and temperatures (CSV) to the
-// microSD card.
-// The screen flips to stay right side up, and the camera turns itself off
-// after a minute without use (tap the screen to keep it on).
+// Camera: BOOT short press = next color palette, BOOT hold = switch C / F,
+// PWR short press = save a picture (BMP) and temperatures (CSV) to microSD.
+// Swipe left to right for the picture viewer, right to left to come back.
+// Viewer: tap the right/left half (or press BOOT) to step through pictures.
+// After a minute without use the camera turns off (tap to keep it on).
 //
-// Libraries (Arduino Library Manager):
-//   "GFX Library for Arduino" by Moon On Our Nation
-//   "Adafruit MLX90640" (installs "Adafruit BusIO" too)
+// Library (Arduino Library Manager): "GFX Library for Arduino" by Moon On Our
+// Nation. The MLX90640 driver is Melexis' own, included in src/mlx90640.
 // Board settings: see README.md (PSRAM must be set to "OPI PSRAM").
 
 #include <Arduino.h>
@@ -18,10 +17,12 @@
 #include <Preferences.h>
 #include <SD_MMC.h>
 #include <Arduino_GFX_Library.h>
-#include <Adafruit_MLX90640.h>
+#include <algorithm>
+#include <vector>
 
 #include "config.h"
 #include "palettes.h"
+#include "src/mlx90640/mlx90640.h"
 
 // ---- Board pins (same on both revisions) -----------------------------------
 #define LCD_CS 12
@@ -40,11 +41,10 @@
 #define SD_D0 3
 #define TP_INT 21  // touch interrupt
 
+#define MLX_ADDR 0x33
 #define TCA9554_ADDR 0x20  // IO expander; EXIO0-2 are display/touch reset lines
 #define FT3168_ADDR 0x38   // touch chip on the original board (SH8601 panel)
 #define CST820_ADDR 0x15   // touch chip on the V2 board
-#define QMI8658_ADDR_A 0x6B  // motion sensor (address depends on the board)
-#define QMI8658_ADDR_B 0x6A
 #define AXP2101_ADDR 0x34  // power chip; the PWR button is wired to it
 #define AXP2101_INTEN2 0x41   // IRQ enable 2
 #define AXP2101_INTSTS2 0x49  // IRQ status 2, write 1 to clear
@@ -59,10 +59,15 @@
 #define SENSOR_W 32
 #define SENSOR_H 24
 #define SENSOR_PIXELS (SENSOR_W * SENSOR_H)
+#define EMISSIVITY 0.95f
+#define TA_SHIFT 8.0f              // reflected temperature = sensor temperature - 8 C (open air)
 #define BAR_H 32                   // height of the scale bar under the picture
 #define SCREEN_ROT (SCREEN_ROTATION & 3)
 #define DEDICATED_BUS_HZ 800000    // ESP32-S3 I2C tops out around 800 kHz
 #define EDGE_PAD 4                 // gap between text and the screen's curved edge
+#define MARKER_HYSTERESIS 0.2f     // C a spot must beat the marked one by to take the marker
+#define SWIPE_MIN_PX 60
+#define TAP_MAX_PX 30
 
 static const bool SENSOR_ON_BOARD_BUS = (THERMAL_SDA == BOARD_SDA && THERMAL_SCL == BOARD_SCL);
 
@@ -71,12 +76,17 @@ static const uint16_t COLOR_WHITE = 0xFFFF;
 static const uint16_t COLOR_GREEN = 0x07E0;
 static const uint16_t COLOR_YELLOW = 0xFFE0;
 static const uint16_t COLOR_RED = 0xF800;
+static const uint16_t COLOR_HOT = 0xFA45;   // (255, 72, 40)
+static const uint16_t COLOR_COLD = 0x565F;  // (80, 200, 255)
+
+enum Gesture : uint8_t { GESTURE_NONE, GESTURE_TAP, GESTURE_SWIPE_RIGHT, GESTURE_SWIPE_LEFT, GESTURE_OTHER };
+enum Mode : uint8_t { MODE_CAMERA, MODE_VIEWER };
 
 static Arduino_DataBus *bus;
 static Arduino_OLED *panel;
 static Arduino_Canvas *gfx;  // full-screen frame buffer in PSRAM, pushed with flush()
-static Adafruit_MLX90640 mlx;
 static Preferences prefs;
+static paramsMLX90640 mlxParams;
 
 // Frames are read on core 0 and handed to the display loop on core 1.
 static float sharedFrame[SENSOR_PIXELS];
@@ -97,7 +107,6 @@ static int32_t fbBase, fbDx, fbDy;
 static uint16_t paletteLut[PALETTE_COUNT][256];
 static uint8_t paletteIdx = 0;
 static bool fahrenheit = START_IN_FAHRENHEIT;
-static float rangeLo = NAN, rangeHi = NAN;  // smoothed color scale, degrees C
 static const char *boardName = "?";
 static char toastText[24] = "";
 static uint32_t toastUntil = 0;
@@ -105,29 +114,44 @@ static bool screenDirty = true;  // a message screen left text outside the pictu
 static bool boardIsV1 = false;
 static bool pmuFound = false;
 static bool sdMounted = false;
-static uint8_t currentRot = SCREEN_ROT;  // screen rotation in use
-static bool imgMirror = MIRROR_IMAGE, imgFlip = FLIP_IMAGE;  // picture orientation for currentRot
-static uint8_t touchAddr = 0, imuAddr = 0;
+static uint8_t touchAddr = 0;
+static Mode mode = MODE_CAMERA;
 
 // Written by the sensor task, which is the only user of the board's I2C bus
 // once it runs, and by the touch interrupt.
 static TaskHandle_t sensorTaskHandle = nullptr;
 static volatile bool powerKeyPressed = false;
 static volatile bool touchSeen = false;
-static volatile uint8_t wantedRot = SCREEN_ROT;  // from the motion sensor
+static volatile uint8_t gesture = GESTURE_NONE;  // finished touch, with where and when it started
+static volatile int16_t gestureX = 0;
+static volatile uint32_t gestureStartMs = 0;
 static volatile bool battKnown = false, battPresent = false, battCharging = false, vbusPresent = false;
 static volatile int8_t battPercent = -1;
 static volatile bool powerOffRequested = false;
+
+// Smoothed picture and readouts.
+struct FrameStats {
+  float minT, maxT, centerT;
+  int minIdx, maxIdx;
+};
+static float smoothT[SENSOR_PIXELS];
+static bool haveFrame = false;
+static FrameStats shown = {NAN, NAN, NAN, -1, -1};  // readouts on screen; minIdx/maxIdx = markers
+static bool markersVisible = false;
+static float rangeLo = NAN, rangeHi = NAN;  // color scale, degrees C
+
+// Picture viewer.
+static std::vector<uint16_t> pictures;  // numbers of the IMG_####.bmp files, oldest first
+static int viewIdx = 0;
+static uint16_t *viewerImage = nullptr;  // decoded picture, laid out like the frame buffer
+static bool viewerHasImage = false;
+static bool viewerDirty = false;
+static const char *viewerNote = "";
 
 // Auto-off.
 static uint32_t lastActivityMs = 0;
 static uint32_t idleWarnLeftMs = 0;  // > 0 while the countdown is showing
 static bool screenAsleep = false;
-
-struct FrameStats {
-  float minT, maxT, centerT;
-  int maxIdx;
-};
 
 // ============================================================================
 //  I2C helpers
@@ -173,6 +197,10 @@ static String scanBus(TwoWire &w) {
   return found.length() ? found : String("none");
 }
 
+// ============================================================================
+//  Board chips: IO expander, power chip, touch
+// ============================================================================
+
 // Pulse EXIO0-2 low then high: the reset sequence Waveshare's examples use.
 static void resetDisplayAndTouch() {
   uint8_t out, cfg;
@@ -202,8 +230,6 @@ static void initPower() {
   pmuFound = true;
 }
 
-// Runs on the sensor task: once it starts, it is the only user of the board's
-// I2C bus, so the PMU reads can't interleave with sensor reads.
 static void pollPowerKey() {
   uint8_t st;
   if (!pmuFound || !i2cReadReg(AXP2101_ADDR, AXP2101_INTSTS2, st)) return;
@@ -242,54 +268,51 @@ static void initTouch() {
   attachInterrupt(TP_INT, onTouchInterrupt, FALLING);
 }
 
-// Backs up the interrupt line: register 0x02 is the finger count on both chips.
+// The touch chips report panel (portrait) coordinates, the same as the
+// display's own; convert them to the rotated screen's.
+static void panelToScreen(int16_t px, int16_t py, int16_t &x, int16_t &y) {
+  switch (SCREEN_ROT) {
+    case 1: x = py; y = LCD_WIDTH - 1 - px; break;
+    case 2: x = LCD_WIDTH - 1 - px; y = LCD_HEIGHT - 1 - py; break;
+    case 3: x = LCD_HEIGHT - 1 - py; y = px; break;
+    default: x = px; y = py; break;
+  }
+}
+
+// Follows one finger from touch to release, then reports a tap or a swipe.
+// Registers 0x02-0x06 (finger count, then X and Y) match on both chips.
 static void pollTouch() {
-  uint8_t n;
-  if (touchAddr && i2cReadReg(touchAddr, 0x02, n) && (n & 0x0F) >= 1 && (n & 0x0F) <= 5) touchSeen = true;
-}
-
-static void initImu() {
-  if (!AUTO_ROTATE) return;
-  const uint8_t addrs[] = {QMI8658_ADDR_A, QMI8658_ADDR_B};
-  for (uint8_t a : addrs) {
-    uint8_t id;
-    if (i2cReadReg(a, 0x00, id) && id == 0x05) {  // WHO_AM_I
-      imuAddr = a;
-      break;
+  static bool down = false;
+  static int16_t x0, y0, x1, y1;
+  static uint32_t t0;
+  uint8_t d[5];
+  if (!touchAddr || !i2cReadRegs(touchAddr, 0x02, d, sizeof(d))) return;
+  const uint8_t fingers = d[0] & 0x0F;
+  if (fingers >= 1 && fingers <= 5) {
+    int16_t x, y;
+    panelToScreen(((d[1] & 0x0F) << 8) | d[2], ((d[3] & 0x0F) << 8) | d[4], x, y);
+    if (!down) {
+      down = true;
+      x0 = x;
+      y0 = y;
+      t0 = millis();
     }
+    x1 = x;
+    y1 = y;
+    touchSeen = true;
+  } else if (down) {
+    down = false;
+    const int16_t dx = x1 - x0, dy = y1 - y0;
+    uint8_t g = GESTURE_OTHER;
+    if (abs(dx) >= SWIPE_MIN_PX && abs(dx) > 2 * abs(dy)) {
+      g = dx > 0 ? GESTURE_SWIPE_RIGHT : GESTURE_SWIPE_LEFT;
+    } else if (abs(dx) < TAP_MAX_PX && abs(dy) < TAP_MAX_PX && millis() - t0 < 800) {
+      g = GESTURE_TAP;
+    }
+    gestureX = x0;
+    gestureStartMs = t0;
+    gesture = g;
   }
-  if (!imuAddr) {
-    Serial.println("Motion sensor not found, auto-rotate off");
-    return;
-  }
-  i2cWriteReg(imuAddr, 0x02, 0x40);  // CTRL1: auto-increment register address
-  i2cWriteReg(imuAddr, 0x03, 0x17);  // CTRL2: accelerometer +-4 g, 62.5 Hz
-  i2cWriteReg(imuAddr, 0x08, 0x01);  // CTRL7: accelerometer on, gyro off
-}
-
-// Picks the landscape rotation from gravity. The motion sensor's Y axis runs
-// along the screen's short side (per Waveshare's tilt demo), so its sign says
-// which way up the board is held. A change must hold for 3 readings in a row.
-static void pollImu() {
-  static uint8_t candidate = 0, streak = 0;
-  uint8_t d[6];
-  if (!imuAddr || !i2cReadRegs(imuAddr, 0x35, d, sizeof(d))) return;
-  float gy = (int16_t)(d[2] | (d[3] << 8)) / 8192.0f;  // in g
-  if (AUTO_ROTATE_INVERT) gy = -gy;
-  uint8_t r;
-  if (gy > 0.55f) {
-    r = 1;
-  } else if (gy < -0.55f) {
-    r = 3;
-  } else {
-    streak = 0;  // lying flat or standing on end: keep the current way up
-    return;
-  }
-  if (r != candidate) {
-    candidate = r;
-    streak = 0;
-  }
-  if (++streak >= 3) wantedRot = r;
 }
 
 // ============================================================================
@@ -363,16 +386,11 @@ static void setupLayout() {
   imgX = (scrW - imgW) / 2;
   imgY = (scrH - BAR_H - imgH) / 2;
 
-  // The picture turns with the screen. A sensor fixed to the board already
-  // turns with it, so then the picture is turned back to stay put.
-  const bool turnedBack = SENSOR_FIXED_TO_BOARD && ((currentRot - SCREEN_ROT) & 3) == 2;
-  imgMirror = MIRROR_IMAGE != turnedBack;
-  imgFlip = FLIP_IMAGE != turnedBack;
-  buildAxis(imgW, SENSOR_W, imgMirror, xSrc0, xSrc1, xWeight);
-  buildAxis(imgH, SENSOR_H, imgFlip, ySrc0, ySrc1, yWeight);
+  buildAxis(imgW, SENSOR_W, MIRROR_IMAGE, xSrc0, xSrc1, xWeight);
+  buildAxis(imgH, SENSOR_H, FLIP_IMAGE, ySrc0, ySrc1, yWeight);
 
   // Same mapping as Arduino_Canvas::writePixelPreclipped().
-  switch (currentRot) {
+  switch (SCREEN_ROT) {
     case 1: fbBase = LCD_WIDTH - 1; fbDx = LCD_WIDTH; fbDy = -1; break;
     case 2: fbBase = LCD_WIDTH * LCD_HEIGHT - 1; fbDx = -1; fbDy = -LCD_WIDTH; break;
     case 3: fbBase = (LCD_HEIGHT - 1) * LCD_WIDTH; fbDx = -LCD_WIDTH; fbDy = 1; break;
@@ -396,8 +414,8 @@ static int16_t textMargin(int16_t y, int16_t h) {
   return cornerInset(min<int16_t>(y, scrH - (y + h))) + EDGE_PAD;
 }
 
-// Full-screen text message, one line per '\n'.
-static void showMessage(const char *title, const String &body) {
+// Full-screen text, one line per '\n'. Doesn't push it to the display.
+static void drawMessage(const char *title, const String &body) {
   gfx->fillScreen(COLOR_BLACK);
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(3);
@@ -414,8 +432,12 @@ static void showMessage(const char *title, const String &body) {
     y += 24;
     start = end + 1;
   }
-  gfx->flush();
   screenDirty = true;
+}
+
+static void showMessage(const char *title, const String &body) {
+  drawMessage(title, body);
+  gfx->flush();
 }
 
 static void showToast(const char *text) {
@@ -427,30 +449,71 @@ static void showToast(const char *text) {
 //  Sensor
 // ============================================================================
 
+static uint8_t refreshCode(int hz) {
+  return hz >= 32 ? 0x06 : hz >= 16 ? 0x05 : hz >= 8 ? 0x04 : hz >= 4 ? 0x03 : 0x02;
+}
+
+static bool initSensorChip() {
+  static uint16_t eeprom[MLX90640_EEPROM_DUMP_NUM];
+  if (MLX90640_DumpEE(MLX_ADDR, eeprom) != 0) return false;
+  const int rc = MLX90640_ExtractParameters(eeprom, &mlxParams);
+  if (rc == -MLX90640_EEPROM_DATA_ERROR) {
+    Serial.println("MLX90640 calibration data invalid (is it an MLX90641?)");
+    return false;
+  }
+  if (rc != 0) Serial.printf("MLX90640 calibration note %d (a few dead pixels)\n", rc);
+  MLX90640_SetChessMode(MLX_ADDR);
+  MLX90640_SetResolution(MLX_ADDR, 0x02);  // 18-bit ADC
+  MLX90640_SetRefreshRate(MLX_ADDR, refreshCode(SENSOR_REFRESH_HZ));
+  return true;
+}
+
+static void noteSensorError(int rc) {
+  lastSensorError = rc;
+  sensorErrorCount = sensorErrorCount + 1;
+}
+
+// Reads each sub-page as soon as the sensor has it, and polls the touch chip
+// (about 100 times a second) and the power chip in between.
 static void sensorTask(void *) {
-  static float frame[SENSOR_PIXELS];
-  uint32_t batteryPolledAt = 0;
+  static uint16_t raw[834];
+  static float frame[SENSOR_PIXELS];  // each sub-page refreshes half the pixels (chess pattern)
+  uint8_t subpagesSeen = 0;
+  uint32_t keyPolledAt = 0, batteryPolledAt = 0;
   for (;;) {
-    const int rc = mlx.getFrame(frame);  // reads both sub-pages
-    if (rc == 0) {
-      portENTER_CRITICAL(&frameLock);
-      memcpy(sharedFrame, frame, sizeof(frame));
-      sharedFrameNew = true;
-      portEXIT_CRITICAL(&frameLock);
-    } else {
-      lastSensorError = rc;
-      sensorErrorCount = sensorErrorCount + 1;
+    uint16_t status;
+    if (MLX90640_I2CRead(MLX_ADDR, MLX90640_STATUS_REG, 1, &status) != 0) {
+      noteSensorError(-MLX90640_I2C_NACK_ERROR);
       vTaskDelay(pdMS_TO_TICKS(50));
+    } else if (MLX90640_GET_DATA_READY(status)) {
+      const int subpage = MLX90640_GetFrameData(MLX_ADDR, raw);
+      if (subpage < 0) {
+        noteSensorError(subpage);
+      } else {
+        const float tr = MLX90640_GetTa(raw, &mlxParams) - TA_SHIFT;
+        MLX90640_CalculateTo(raw, &mlxParams, EMISSIVITY, tr, frame);
+        subpagesSeen |= 1 << subpage;
+        if (subpagesSeen == 3) {
+          portENTER_CRITICAL(&frameLock);
+          memcpy(sharedFrame, frame, sizeof(frame));
+          sharedFrameNew = true;
+          portEXIT_CRITICAL(&frameLock);
+        }
+      }
     }
-    pollPowerKey();
+
     pollTouch();
-    pollImu();
-    if (millis() - batteryPolledAt >= 2000) {
-      batteryPolledAt = millis();
+    const uint32_t now = millis();
+    if (now - keyPolledAt >= 50) {
+      keyPolledAt = now;
+      pollPowerKey();
+    }
+    if (now - batteryPolledAt >= 2000) {
+      batteryPolledAt = now;
       pollBattery();
     }
     if (powerOffRequested) powerOffNow();
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(8));
   }
 }
 
@@ -469,9 +532,10 @@ static bool takeFrame(float *dst) {
 static void startSensor() {
   TwoWire &w = SENSOR_ON_BOARD_BUS ? Wire : Wire1;
   if (!SENSOR_ON_BOARD_BUS) w.begin(THERMAL_SDA, THERMAL_SCL, DEDICATED_BUS_HZ);
+  MLX90640_SetWire(&w);
 
   showMessage("Thermal camera", "Starting sensor...");
-  while (!mlx.begin(MLX90640_I2CADDR_DEFAULT, &w)) {
+  while (!initSensorChip()) {
     const String seen = scanBus(w);
     Serial.printf("Display %s, PSRAM %u. MLX90640 not found on SDA=%d SCL=%d. I2C devices: %s\n",
                   boardName, (unsigned)ESP.getPsramSize(), THERMAL_SDA, THERMAL_SCL, seen.c_str());
@@ -482,12 +546,9 @@ static void startSensor() {
                     "\n\nCheck the 4 wires:\nVCC->3V3   GND->GND\nSDA->SDA   SCL->SCL\n\nRetrying...");
     delay(2000);
   }
-  Serial.printf("MLX90640 found, serial %04X%04X%04X\n", mlx.serialNumber[0], mlx.serialNumber[1],
-                mlx.serialNumber[2]);
-
-  mlx.setMode(MLX90640_CHESS);
-  mlx.setResolution(MLX90640_ADC_18BIT);
-  mlx.setRefreshRate(SENSOR_REFRESH);
+  uint16_t serial[3] = {0, 0, 0};
+  MLX90640_I2CRead(MLX_ADDR, 0x2407, 3, serial);
+  Serial.printf("MLX90640 found, serial %04X%04X%04X\n", serial[0], serial[1], serial[2]);
 
   xTaskCreatePinnedToCore(sensorTask, "thermal", 16384, nullptr, 2, &sensorTaskHandle, 0);
 }
@@ -514,11 +575,11 @@ static void repairPixels(float *t) {
 }
 
 static FrameStats computeStats(const float *t) {
-  FrameStats s = {INFINITY, -INFINITY, NAN, 0};
+  FrameStats s = {INFINITY, -INFINITY, NAN, 0, 0};
   for (int i = 0; i < SENSOR_PIXELS; i++) {
     const float v = t[i];
     if (!validTemp(v)) continue;
-    if (v < s.minT) s.minT = v;
+    if (v < s.minT) { s.minT = v; s.minIdx = i; }
     if (v > s.maxT) { s.maxT = v; s.maxIdx = i; }
   }
   // The center reading averages the 4 pixels in the middle of the sensor.
@@ -534,21 +595,73 @@ static FrameStats computeStats(const float *t) {
   return s;
 }
 
-// Auto range: follow the scene's min/max, smoothed so the colors don't flicker.
-static void updateRange(const FrameStats &s) {
+// Average of each pixel's 3x3 neighborhood. The markers go on the hottest and
+// coldest of these, which sits in the middle of a warm or cold object instead
+// of hopping between its pixels with noise.
+static void boxAverage(const float *t, float *out) {
+  for (int r = 0; r < SENSOR_H; r++) {
+    for (int c = 0; c < SENSOR_W; c++) {
+      float sum = 0;
+      int n = 0;
+      for (int rr = max(r - 1, 0); rr <= min(r + 1, SENSOR_H - 1); rr++) {
+        for (int cc = max(c - 1, 0); cc <= min(c + 1, SENSOR_W - 1); cc++) {
+          const float v = t[rr * SENSOR_W + cc];
+          if (validTemp(v)) { sum += v; n++; }
+        }
+      }
+      out[r * SENSOR_W + c] = n ? sum / n : NAN;
+    }
+  }
+}
+
+static void ease(float &value, float target, float rate) {
+  value = isnan(value) ? target : value + (target - value) * rate;
+}
+
+// Smooths a new frame into smoothT, then updates the markers, readouts and
+// color scale. Each eases more gently, so the screen settles instead of
+// jumping with sensor noise.
+static void processFrame(float *t) {
+  repairPixels(t);
+  const float follow = 1.0f - SMOOTHING;
+  if (!haveFrame) memcpy(smoothT, t, sizeof(smoothT));
+  for (int i = 0; i < SENSOR_PIXELS; i++) {
+    if (!validTemp(t[i])) continue;
+    if (validTemp(smoothT[i])) {
+      smoothT[i] += (t[i] - smoothT[i]) * follow;
+    } else {
+      smoothT[i] = t[i];
+    }
+  }
+  const FrameStats s = computeStats(smoothT);
+  if (!isfinite(s.minT)) return;  // nothing valid yet
+  haveFrame = true;
+
+  // Markers only move to a spot that is clearly hotter / colder.
+  static float box[SENSOR_PIXELS];
+  boxAverage(smoothT, box);
+  const FrameStats b = computeStats(box);
+  if (shown.maxIdx < 0 || !validTemp(box[shown.maxIdx]) || box[b.maxIdx] > box[shown.maxIdx] + MARKER_HYSTERESIS) {
+    shown.maxIdx = b.maxIdx;
+  }
+  if (shown.minIdx < 0 || !validTemp(box[shown.minIdx]) || box[b.minIdx] < box[shown.minIdx] - MARKER_HYSTERESIS) {
+    shown.minIdx = b.minIdx;
+  }
+  markersVisible = s.maxT - s.minT >= 1.0f;
+
+  ease(shown.centerT, s.centerT, follow * 0.6f);
+  ease(shown.maxT, smoothT[shown.maxIdx], follow * 0.6f);
+  ease(shown.minT, smoothT[shown.minIdx], follow * 0.6f);
+
+  // The color scale follows the scene's min/max slowly.
   float lo = s.minT, hi = s.maxT;
   if (hi - lo < MIN_SPAN_C) {
     const float mid = (lo + hi) * 0.5f;
     lo = mid - MIN_SPAN_C * 0.5f;
     hi = mid + MIN_SPAN_C * 0.5f;
   }
-  if (isnan(rangeLo)) {
-    rangeLo = lo;
-    rangeHi = hi;
-  } else {
-    rangeLo += (lo - rangeLo) * 0.3f;
-    rangeHi += (hi - rangeHi) * 0.3f;
-  }
+  ease(rangeLo, lo, follow * 0.25f);
+  ease(rangeHi, hi, follow * 0.25f);
 }
 
 // Upscale the 32x24 frame with bilinear interpolation and write it straight
@@ -618,15 +731,34 @@ static void drawCrosshair(int16_t cx, int16_t cy) {
   gfx->drawFastVLine(cx, cy + gap + 1, len, COLOR_WHITE);
 }
 
-static void drawHotspot(int idx) {
+// A colored ring with dark edges around one sensor pixel.
+static void drawSpot(int idx, uint16_t color) {
+  if (idx < 0) return;
   int col = idx % SENSOR_W, row = idx / SENSOR_W;
-  if (imgMirror) col = SENSOR_W - 1 - col;
-  if (imgFlip) row = SENSOR_H - 1 - row;
+  if (MIRROR_IMAGE) col = SENSOR_W - 1 - col;
+  if (FLIP_IMAGE) row = SENSOR_H - 1 - row;
   const int16_t cx = imgX + col * imgScale + imgScale / 2;
   const int16_t cy = imgY + row * imgScale + imgScale / 2;
-  gfx->drawCircle(cx, cy, 9, COLOR_BLACK);
-  gfx->drawCircle(cx, cy, 8, COLOR_WHITE);
+  gfx->drawCircle(cx, cy, 10, COLOR_BLACK);
+  gfx->drawCircle(cx, cy, 9, color);
+  gfx->drawCircle(cx, cy, 8, color);
   gfx->drawCircle(cx, cy, 7, COLOR_BLACK);
+}
+
+// White text on a black box, right-aligned at `right`.
+static void drawLabelRight(int16_t right, int16_t y, const char *text) {
+  const int16_t tw = strlen(text) * 12;
+  const int16_t tx = right - 6 - tw;
+  gfx->fillRect(tx - 6, y, tw + 12, 28, COLOR_BLACK);
+  gfx->setTextSize(2);
+  gfx->setTextColor(COLOR_WHITE);
+  gfx->setCursor(tx, y + 6);
+  gfx->print(text);
+}
+
+// Right edge for a top-right box at row y: inside the picture and the corner.
+static int16_t topRightEdge(int16_t y) {
+  return min<int16_t>(imgX + imgW - 6, scrW - cornerInset(y) - EDGE_PAD);
 }
 
 // Battery level with a bolt while charging, or "USB" when there is no battery.
@@ -688,41 +820,35 @@ static void drawIdleWarning(uint32_t msLeft) {
 }
 
 // forCapture leaves out the battery, notices and countdown.
-static void drawOverlays(const FrameStats &s, bool forCapture) {
-  if (s.maxT - s.minT >= 1.0f) drawHotspot(s.maxIdx);
+static void drawOverlays(bool forCapture) {
+  if (markersVisible) {
+    drawSpot(shown.minIdx, COLOR_COLD);
+    drawSpot(shown.maxIdx, COLOR_HOT);
+  }
   drawCrosshair(imgX + imgW / 2, imgY + imgH / 2);
 
   // Center reading, top-left of the picture, clear of the rounded corner.
   const int16_t boxY = imgY + 8;
   const int16_t boxX = max<int16_t>(imgX + 6, cornerInset(boxY) + EDGE_PAD);
-  const int16_t w = drawTemp(0, 0, s.centerT, 3, COLOR_WHITE, false);
+  const int16_t w = drawTemp(0, 0, shown.centerT, 3, COLOR_WHITE, false);
   gfx->fillRect(boxX, boxY, w + 12, 34, COLOR_BLACK);
-  drawTemp(boxX + 6, boxY + 6, s.centerT, 3, COLOR_WHITE);
+  drawTemp(boxX + 6, boxY + 6, shown.centerT, 3, COLOR_WHITE);
 
   if (!forCapture) {
     // Battery top-right; notices (palette, units, saved picture) under it.
-    drawBattery(min<int16_t>(imgX + imgW - 6, scrW - cornerInset(boxY) - EDGE_PAD), boxY);
-    if ((int32_t)(toastUntil - millis()) > 0) {
-      const int16_t toastY = boxY + 34;
-      const int16_t tw = strlen(toastText) * 12;
-      const int16_t tx = min<int16_t>(imgX + imgW - 6, scrW - cornerInset(toastY) - EDGE_PAD) - 6 - tw;
-      gfx->fillRect(tx - 6, toastY, tw + 12, 28, COLOR_BLACK);
-      gfx->setTextSize(2);
-      gfx->setTextColor(COLOR_WHITE);
-      gfx->setCursor(tx, toastY + 6);
-      gfx->print(toastText);
-    }
+    drawBattery(topRightEdge(boxY), boxY);
+    if ((int32_t)(toastUntil - millis()) > 0) drawLabelRight(topRightEdge(boxY + 34), boxY + 34, toastText);
     if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs);
   }
 
-  // Scale bar: min | palette | max.
+  // Scale bar: coldest (blue, like its marker) | palette | hottest (red).
   const int16_t y0 = scrH - BAR_H;
   const int16_t textY = y0 + (BAR_H - 16) / 2;
   const int16_t sideX = textMargin(textY, 16);
   gfx->fillRect(0, y0, scrW, BAR_H, COLOR_BLACK);
-  drawTemp(sideX, textY, s.minT, 2, COLOR_WHITE);
-  const int16_t maxW = drawTemp(0, 0, s.maxT, 2, COLOR_WHITE, false);
-  drawTemp(scrW - sideX - maxW, textY, s.maxT, 2, COLOR_WHITE);
+  drawTemp(sideX, textY, shown.minT, 2, COLOR_COLD);
+  const int16_t maxW = drawTemp(0, 0, shown.maxT, 2, COLOR_HOT, false);
+  drawTemp(scrW - sideX - maxW, textY, shown.maxT, 2, COLOR_HOT);
 
   // Fixed position, so it doesn't jump around. 80 px fits "-40.0°F" and "572.0°F".
   const int16_t gx0 = sideX + 80 + 10, gx1 = scrW - sideX - 80 - 10;
@@ -751,6 +877,7 @@ static bool mountSd() {
 
 static void put16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
 static void put32(uint8_t *p, uint32_t v) { put16(p, v); put16(p + 2, v >> 16); }
+static uint32_t get32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
 
 // The screen exactly as shown (picture, readings and scale), as a 24-bit BMP.
 static bool writeBmp(File &f) {
@@ -799,10 +926,10 @@ static bool writeBmp(File &f) {
 static bool writeCsv(File &f, const float *t) {
   char line[SENSOR_W * 9 + 2];
   for (int r = 0; r < SENSOR_H; r++) {
-    const int sr = imgFlip ? SENSOR_H - 1 - r : r;
+    const int sr = FLIP_IMAGE ? SENSOR_H - 1 - r : r;
     int len = 0;
     for (int c = 0; c < SENSOR_W; c++) {
-      const int sc = imgMirror ? SENSOR_W - 1 - c : c;
+      const int sc = MIRROR_IMAGE ? SENSOR_W - 1 - c : c;
       len += snprintf(line + len, sizeof(line) - len, c ? ",%.2f" : "%.2f", t[sr * SENSOR_W + sc]);
     }
     line[len++] = '\n';
@@ -846,15 +973,125 @@ static void saveCapture(const float *temps) {
 }
 
 // ============================================================================
-//  Rotation and auto-off
+//  Picture viewer
 // ============================================================================
 
-static void applyRotation(uint8_t r) {
-  currentRot = r;
-  gfx->setRotation(r);
-  setupLayout();
+static void listPictures() {
+  pictures.clear();
+  if (!mountSd()) return;
+  File dir = SD_MMC.open("/thermal");
+  if (!dir || !dir.isDirectory()) return;
+  for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
+    unsigned n;
+    char ext[5];
+    if (sscanf(f.name(), "IMG_%u.%4s", &n, ext) == 2 && strcasecmp(ext, "bmp") == 0 && n <= 0xFFFF) {
+      pictures.push_back(n);
+    }
+    f.close();
+  }
+  dir.close();
+  std::sort(pictures.begin(), pictures.end());
+}
+
+// Decodes a 24-bit BMP into the frame buffer, centered.
+static bool loadBmp(const char *path) {
+  File f = SD_MMC.open(path, FILE_READ);
+  if (!f) return false;
+  uint8_t hdr[54];
+  bool ok = f.read(hdr, sizeof(hdr)) == sizeof(hdr) && hdr[0] == 'B' && hdr[1] == 'M';
+  const int32_t w = (int32_t)get32(hdr + 18), h = (int32_t)get32(hdr + 22);
+  const int32_t rows = abs(h);
+  ok = ok && (hdr[28] | (hdr[29] << 8)) == 24 && get32(hdr + 30) == 0 && w > 0 && w <= 4096 && rows > 0 &&
+       rows <= 4096 && f.seek(get32(hdr + 10));
+  const uint32_t rowBytes = (w * 3 + 3) & ~3u;
+  uint8_t *row = ok ? (uint8_t *)malloc(rowBytes) : nullptr;
+  if (!row) {
+    f.close();
+    return false;
+  }
+  gfx->fillScreen(COLOR_BLACK);
+  uint16_t *fb = gfx->getFramebuffer();
+  const int32_t ox = (scrW - w) / 2, oy = (scrH - rows) / 2;
+  for (int32_t r = 0; r < rows && ok; r++) {
+    ok = f.read(row, rowBytes) == rowBytes;
+    const int32_t y = (h > 0 ? rows - 1 - r : r) + oy;  // BMP rows normally go bottom-up
+    if (!ok || y < 0 || y >= scrH) continue;
+    for (int32_t x = 0; x < w; x++) {
+      const int32_t sx = x + ox;
+      if (sx < 0 || sx >= scrW) continue;
+      const uint8_t *p = row + x * 3;
+      fb[fbBase + sx * fbDx + y * fbDy] = rgb565(p[2], p[1], p[0]);
+    }
+  }
+  free(row);
+  f.close();
+  return ok;
+}
+
+static void showPicture() {
+  viewerHasImage = false;
+  viewerDirty = true;
+  if (!sdMounted) {
+    viewerNote = "No SD card.";
+    return;
+  }
+  if (pictures.empty()) {
+    viewerNote = "No pictures yet. Press PWR\nin the camera to save one.";
+    return;
+  }
+  if (!viewerImage) viewerImage = (uint16_t *)ps_malloc(LCD_WIDTH * LCD_HEIGHT * 2);
+  char path[32];
+  snprintf(path, sizeof(path), "/thermal/IMG_%04u.bmp", pictures[viewIdx]);
+  if (!viewerImage || !loadBmp(path)) {
+    viewerNote = "Can't open this picture.";
+    return;
+  }
+  memcpy(viewerImage, gfx->getFramebuffer(), LCD_WIDTH * LCD_HEIGHT * 2);
+  viewerHasImage = true;
+}
+
+static void enterViewer() {
+  mode = MODE_VIEWER;
+  listPictures();
+  viewIdx = pictures.empty() ? 0 : pictures.size() - 1;  // newest first
+  showPicture();
+}
+
+static void exitViewer() {
+  mode = MODE_CAMERA;
   screenDirty = true;
 }
+
+static void stepPicture(int delta) {
+  if (pictures.empty()) return;
+  const int n = pictures.size();
+  viewIdx = (viewIdx + delta + n) % n;
+  showPicture();
+}
+
+// Redraws the viewer when something changed, and a few times a second for
+// the auto-off countdown.
+static void drawViewer() {
+  static uint32_t drawnAt = 0;
+  if (!viewerDirty && millis() - drawnAt < 250) return;
+  viewerDirty = false;
+  drawnAt = millis();
+
+  if (viewerHasImage) {
+    memcpy(gfx->getFramebuffer(), viewerImage, LCD_WIDTH * LCD_HEIGHT * 2);
+    char label[40];
+    snprintf(label, sizeof(label), "IMG_%04u  %d/%d", pictures[viewIdx], viewIdx + 1, (int)pictures.size());
+    drawLabelRight(topRightEdge(imgY + 8), imgY + 8, label);  // saved pictures leave this spot empty
+  } else {
+    drawMessage("Pictures", String(viewerNote) + "\n\nSwipe right to left to go\nback to the camera.");
+  }
+  if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs);
+  gfx->flush();
+}
+
+// ============================================================================
+//  Auto-off
+// ============================================================================
 
 static void sleepScreen() {
   screenAsleep = true;
@@ -868,6 +1105,7 @@ static void wakeScreen() {
   panel->displayOn();
   panel->setBrightness(SCREEN_BRIGHTNESS);
   screenDirty = true;
+  viewerDirty = true;
 }
 
 static void noteActivity() {
@@ -895,20 +1133,37 @@ static void turnOff() {
 }
 
 static void manageIdle() {
+  const bool wasWarning = idleWarnLeftMs > 0;
   idleWarnLeftMs = 0;
-  if (screenAsleep || IDLE_OFF_SECONDS <= 0) return;
-  const uint32_t idle = millis() - lastActivityMs;
-  const uint32_t limit = IDLE_OFF_SECONDS * 1000UL;
-  if (idle >= limit) {
-    turnOff();
-  } else if (idle + IDLE_WARNING_SECONDS * 1000UL >= limit) {
-    idleWarnLeftMs = limit - idle;
+  if (!screenAsleep && IDLE_OFF_SECONDS > 0) {
+    const uint32_t idle = millis() - lastActivityMs;
+    const uint32_t limit = IDLE_OFF_SECONDS * 1000UL;
+    if (idle >= limit) {
+      turnOff();
+    } else if (idle + IDLE_WARNING_SECONDS * 1000UL >= limit) {
+      idleWarnLeftMs = limit - idle;
+    }
   }
+  if (wasWarning != (idleWarnLeftMs > 0)) viewerDirty = true;
 }
 
 // ============================================================================
-//  Button
+//  Buttons and touch
 // ============================================================================
+
+static void handleGesture(uint8_t g, int16_t x) {
+  switch (g) {
+    case GESTURE_SWIPE_RIGHT:
+      if (mode == MODE_CAMERA) enterViewer();
+      break;
+    case GESTURE_SWIPE_LEFT:
+      if (mode == MODE_VIEWER) exitViewer();
+      break;
+    case GESTURE_TAP:
+      if (mode == MODE_VIEWER) stepPicture(x < scrW / 2 ? -1 : 1);
+      break;
+  }
+}
 
 static void pollButton() {
   static bool wasDown = false, holdHandled = false, wakePress = false;
@@ -928,14 +1183,20 @@ static void pollButton() {
   }
   if (down && !holdHandled && now - downSince >= 700) {
     holdHandled = true;
-    fahrenheit = !fahrenheit;
-    prefs.putBool("fahrenheit", fahrenheit);
-    showToast(fahrenheit ? "Fahrenheit" : "Celsius");
+    if (mode == MODE_CAMERA) {
+      fahrenheit = !fahrenheit;
+      prefs.putBool("fahrenheit", fahrenheit);
+      showToast(fahrenheit ? "Fahrenheit" : "Celsius");
+    }
   }
   if (!down && wasDown && !holdHandled && now - downSince >= 30) {
-    paletteIdx = (paletteIdx + 1) % PALETTE_COUNT;
-    prefs.putUChar("palette", paletteIdx);
-    showToast(PALETTES[paletteIdx].name);
+    if (mode == MODE_VIEWER) {
+      stepPicture(-1);
+    } else {
+      paletteIdx = (paletteIdx + 1) % PALETTE_COUNT;
+      prefs.putUChar("palette", paletteIdx);
+      showToast(PALETTES[paletteIdx].name);
+    }
   }
   wasDown = down;
 }
@@ -959,9 +1220,6 @@ void setup() {
   initPower();
   pollBattery();
   initTouch();
-  initImu();
-  for (int i = 0; i < 3; i++) pollImu();  // start the right way up
-  if (wantedRot != currentRot) applyRotation(wantedRot);
   if (!mountSd()) Serial.println("No SD card");
   startSensor();
   lastActivityMs = millis();  // count idle time from when the camera is running
@@ -974,29 +1232,59 @@ void loop() {
   static uint32_t statsAt = millis(), statsFrames = 0;
   static bool captureRequested = false;
   static bool hadVbus = vbusPresent;
+  static uint32_t wakeTouchAt = 0;
 
+  // ---- Input ----
   pollButton();
   if (touchSeen) {
     touchSeen = false;
+    if (screenAsleep || idleWarnLeftMs) wakeTouchAt = millis();  // this touch only wakes / keeps on
     noteActivity();
+  }
+  if (gesture != GESTURE_NONE) {
+    const uint8_t g = gesture;
+    gesture = GESTURE_NONE;
+    // Ignore the touch that woke the screen or dismissed the countdown.
+    if ((int32_t)(gestureStartMs - wakeTouchAt) > 150) handleGesture(g, gestureX);
   }
   if (powerKeyPressed) {
     powerKeyPressed = false;
-    if (!screenAsleep) captureRequested = true;  // a press that wakes the screen doesn't capture
+    const bool woke = screenAsleep;
     noteActivity();
+    if (!woke) {
+      if (mode == MODE_VIEWER) {
+        exitViewer();
+      } else {
+        captureRequested = true;
+      }
+    }
   }
   if (vbusPresent != hadVbus) {  // USB power plugged in or out
     hadVbus = vbusPresent;
     noteActivity();
   }
-  if (wantedRot != currentRot) {
-    applyRotation(wantedRot);
-    noteActivity();
-  }
   manageIdle();
 
-  if (!takeFrame(temps)) {
-    if (!stallShown && !screenAsleep && millis() - lastFrameAt > 3000) {
+  // ---- Frames keep flowing in every mode, so the smoothing stays current ----
+  const bool fresh = takeFrame(temps);
+  if (fresh) {
+    lastFrameAt = millis();
+    stallShown = false;
+    processFrame(temps);
+    statsFrames++;
+  }
+
+  if (screenAsleep) {
+    delay(2);
+    return;
+  }
+  if (mode == MODE_VIEWER) {
+    drawViewer();
+    delay(2);
+    return;
+  }
+  if (!fresh || !haveFrame) {
+    if (!stallShown && millis() - lastFrameAt > 3000) {
       stallShown = true;
       char err[48] = "";
       if (sensorErrorCount) snprintf(err, sizeof(err), "\n(read error %d)", lastSensorError);
@@ -1005,32 +1293,22 @@ void loop() {
     delay(2);
     return;
   }
-  lastFrameAt = millis();
-  stallShown = false;
-
-  repairPixels(temps);
-  const FrameStats s = computeStats(temps);
-  if (!isfinite(s.minT)) return;  // nothing valid in this frame
-  updateRange(s);
-
-  if (screenAsleep) return;
 
   if (screenDirty) {
     gfx->fillScreen(COLOR_BLACK);
     screenDirty = false;
   }
-  drawThermalImage(temps, rangeLo, rangeHi);
-  drawOverlays(s, captureRequested);
+  drawThermalImage(smoothT, rangeLo, rangeHi);
+  drawOverlays(captureRequested);
   gfx->flush();
   if (captureRequested) {
     captureRequested = false;
-    saveCapture(temps);
+    saveCapture(smoothT);
   }
 
-  statsFrames++;
   if (millis() - statsAt >= 5000) {
-    Serial.printf("%.1f fps | center %.1f C | min %.1f | max %.1f | sensor errors %u\n",
-                  statsFrames * 1000.0f / (millis() - statsAt), s.centerT, s.minT, s.maxT,
+    Serial.printf("%.1f frames/s | center %.1f C | min %.1f | max %.1f | sensor errors %u\n",
+                  statsFrames * 1000.0f / (millis() - statsAt), shown.centerT, shown.minT, shown.maxT,
                   (unsigned)sensorErrorCount);
     statsAt = millis();
     statsFrames = 0;

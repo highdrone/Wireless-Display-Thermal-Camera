@@ -14,24 +14,19 @@
 #define THERMAL_SDA 15
 #define THERMAL_SCL 14
 
-// Sensor sub-page rate. One full image needs two sub-pages, so 16 Hz gives
-// ~8 images per second. 32 Hz only keeps up on a dedicated bus, and
-// higher rates add noise. Options: MLX90640_4_HZ, _8_HZ, _16_HZ, _32_HZ.
-#define SENSOR_REFRESH MLX90640_16_HZ
+// Sensor sub-page rate: 4, 8, 16 or 32. Each sub-page refreshes half the
+// pixels. 32 only keeps up on a dedicated bus, and higher rates add noise.
+#define SENSOR_REFRESH_HZ 16
+
+// How much the picture is smoothed over time, from 0 (off: raw and jumpy) to
+// 0.9 (very smooth, but slow to follow movement). The readouts and the color
+// scale settle more gently still.
+#define SMOOTHING 0.6f
 
 // ---- Picture orientation ---------------------------------------------------
-// Starting orientation. 1 or 3 = landscape, 0 or 2 = portrait (smaller
-// picture, only without AUTO_ROTATE).
+// 1 or 3 = landscape (big picture). Pick whichever is right-side up for how
+// you hold the board. 0 or 2 = portrait (smaller picture).
 #define SCREEN_ROTATION 1
-
-// Flip the screen and picture between the two landscape orientations to match
-// how the board is held, using the board's built-in motion sensor.
-#define AUTO_ROTATE true
-// Set true if auto-rotate turns the screen upside down instead of right side up.
-#define AUTO_ROTATE_INVERT false
-// Set true once the thermal sensor is mounted on the board so it turns with
-// it. The picture then stays put on the screen and only the text flips.
-#define SENSOR_FIXED_TO_BOARD false
 
 // Mirror the picture left/right. Turn this on if the sensor points away from
 // you (like a normal camera) and the picture moves the wrong way when you pan.
