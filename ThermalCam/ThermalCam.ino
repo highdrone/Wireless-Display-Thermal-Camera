@@ -8,6 +8,10 @@
 // Viewer: tap the right/left half (or press BOOT) to step through pictures.
 // After a minute without use the camera turns off (tap to keep it on).
 //
+// Wireless screen: flash this same firmware to a second board with no thermal
+// sensor. It finds no sensor, becomes a wireless screen, and shows the
+// camera's picture over ESP-NOW (direct radio, no router).
+//
 // Library (Arduino Library Manager): "GFX Library for Arduino" by Moon On Our
 // Nation. The MLX90640 driver is Melexis' own, included in src/mlx90640.
 // Board settings: see README.md (PSRAM must be set to "OPI PSRAM").
@@ -17,6 +21,9 @@
 #include <Preferences.h>
 #include <SD_MMC.h>
 #include <Arduino_GFX_Library.h>
+#include <WiFi.h>
+#include <esp_now.h>
+#include <esp_wifi.h>
 #include <algorithm>
 #include <vector>
 
@@ -116,10 +123,13 @@ static bool pmuFound = false;
 static bool sdMounted = false;
 static uint8_t touchAddr = 0;
 static Mode mode = MODE_CAMERA;
+static bool isCamera = true;     // false: no sensor, so this board is a wireless screen
+static bool waitingShown = false;  // screen: the "waiting for the camera" page is up
+static String sensorlessNote;    // why this board is a screen (I2C scan)
 
 // Written by the sensor task, which is the only user of the board's I2C bus
 // once it runs, and by the touch interrupt.
-static TaskHandle_t sensorTaskHandle = nullptr;
+static TaskHandle_t boardTaskHandle = nullptr;
 static volatile bool powerKeyPressed = false;
 static volatile bool touchSeen = false;
 static volatile uint8_t gesture = GESTURE_NONE;  // finished touch, with where and when it started
@@ -139,6 +149,39 @@ static bool haveFrame = false;
 static FrameStats shown = {NAN, NAN, NAN, -1, -1};  // readouts on screen; minIdx/maxIdx = markers
 static bool markersVisible = false;
 static float rangeLo = NAN, rangeHi = NAN;  // color scale, degrees C
+
+// Wireless screen link (ESP-NOW broadcast). The screen says hello twice a
+// second; the camera streams only while it hears one.
+#define LINK_MAGIC 0x54  // 'T'
+#define LINK_VERSION 1
+#define LINK_CHUNK_PIXELS 112
+#define LINK_CHUNKS ((SENSOR_PIXELS + LINK_CHUNK_PIXELS - 1) / LINK_CHUNK_PIXELS)
+enum : uint8_t { PKT_HELLO = 1, PKT_META = 2, PKT_PIXELS = 3 };
+struct __attribute__((packed)) PktHeader {
+  uint8_t magic, version, type;
+  uint16_t frame;
+};
+struct __attribute__((packed)) PktMeta {  // what the camera shows besides the pixels
+  PktHeader h;
+  uint8_t palette, flags;  // flags: bit 0 = Fahrenheit, bit 1 = markers visible
+  int16_t hotIdx, coldIdx;
+  float centerT, minT, maxT, rangeLo, rangeHi;
+};
+struct __attribute__((packed)) PktPixels {  // temperatures in 1/100 C, INT16_MIN = no reading
+  PktHeader h;
+  uint8_t chunk, count;
+  int16_t centi[LINK_CHUNK_PIXELS];
+};
+static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static bool linkReady = false;
+static volatile uint32_t lastHelloMs = 0;  // camera: when a screen last said hello
+// Screen: the newest frame from the camera, filled in by the receive callback.
+static portMUX_TYPE linkLock = portMUX_INITIALIZER_UNLOCKED;
+static PktMeta linkMeta;
+static int16_t linkPixels[SENSOR_PIXELS];
+static bool linkFrameReady = false;
+static uint8_t linkCameraMac[6];
+static volatile uint32_t linkCameraHeardMs = 0;
 
 // Picture viewer.
 static std::vector<uint16_t> pictures;  // numbers of the IMG_####.bmp files, oldest first
@@ -473,16 +516,18 @@ static void noteSensorError(int rc) {
   sensorErrorCount = sensorErrorCount + 1;
 }
 
-// Reads each sub-page as soon as the sensor has it, and polls the touch chip
-// (about 100 times a second) and the power chip in between.
-static void sensorTask(void *) {
+// Reads each sub-page as soon as the sensor has it (camera only), and polls
+// the touch chip (about 100 times a second) and the power chip in between.
+static void boardTask(void *) {
   static uint16_t raw[834];
   static float frame[SENSOR_PIXELS];  // each sub-page refreshes half the pixels (chess pattern)
   uint8_t subpagesSeen = 0;
   uint32_t keyPolledAt = 0, batteryPolledAt = 0;
   for (;;) {
     uint16_t status;
-    if (MLX90640_I2CRead(MLX_ADDR, MLX90640_STATUS_REG, 1, &status) != 0) {
+    if (!isCamera) {
+      // no sensor to read
+    } else if (MLX90640_I2CRead(MLX_ADDR, MLX90640_STATUS_REG, 1, &status) != 0) {
       noteSensorError(-MLX90640_I2C_NACK_ERROR);
       vTaskDelay(pdMS_TO_TICKS(50));
     } else if (MLX90640_GET_DATA_READY(status)) {
@@ -529,14 +574,25 @@ static bool takeFrame(float *dst) {
   return got;
 }
 
-static void startSensor() {
+// Returns false when there is no sensor and the board should be a wireless
+// screen instead. Without WIRELESS_SCREEN it keeps looking for the sensor.
+static bool startSensor() {
   TwoWire &w = SENSOR_ON_BOARD_BUS ? Wire : Wire1;
   if (!SENSOR_ON_BOARD_BUS) w.begin(THERMAL_SDA, THERMAL_SCL, DEDICATED_BUS_HZ);
   MLX90640_SetWire(&w);
 
   showMessage("Thermal camera", "Starting sensor...");
-  while (!initSensorChip()) {
+  for (int attempt = 0; !initSensorChip(); attempt++) {
     const String seen = scanBus(w);
+    if (WIRELESS_SCREEN && attempt >= 2) {
+      sensorlessNote = String("No thermal sensor on this board.\nI2C: ") + seen;
+      Serial.printf("No MLX90640 (I2C devices: %s). Working as a wireless screen.\n", seen.c_str());
+      return false;
+    }
+    if (WIRELESS_SCREEN) {  // a sensor answers at once; retry briefly for loose wires
+      delay(300);
+      continue;
+    }
     Serial.printf("Display %s, PSRAM %u. MLX90640 not found on SDA=%d SCL=%d. I2C devices: %s\n",
                   boardName, (unsigned)ESP.getPsramSize(), THERMAL_SDA, THERMAL_SCL, seen.c_str());
     char where[40];
@@ -549,8 +605,7 @@ static void startSensor() {
   uint16_t serial[3] = {0, 0, 0};
   MLX90640_I2CRead(MLX_ADDR, 0x2407, 3, serial);
   Serial.printf("MLX90640 found, serial %04X%04X%04X\n", serial[0], serial[1], serial[2]);
-
-  xTaskCreatePinnedToCore(sensorTask, "thermal", 16384, nullptr, 2, &sensorTaskHandle, 0);
+  return true;
 }
 
 // ============================================================================
@@ -694,6 +749,134 @@ static void drawThermalImage(const float *temps, float lo, float hi) {
 }
 
 // ============================================================================
+//  Wireless screen link
+// ============================================================================
+
+// Runs on the Wi-Fi task: keep it short.
+static void onLinkReceive(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
+  if (len < (int)sizeof(PktHeader) || data[0] != LINK_MAGIC || data[1] != LINK_VERSION) return;
+  const uint8_t type = data[2];
+  if (isCamera) {
+    if (type == PKT_HELLO) lastHelloMs = millis();
+    return;
+  }
+  if (type != PKT_META && type != PKT_PIXELS) return;
+  // Stay with one camera; switch only after it has been quiet for 2 s.
+  const uint32_t now = millis();
+  if (linkCameraHeardMs && now - linkCameraHeardMs < 2000 && memcmp(info->src_addr, linkCameraMac, 6) != 0) return;
+  memcpy(linkCameraMac, info->src_addr, 6);
+  linkCameraHeardMs = now;
+
+  portENTER_CRITICAL(&linkLock);
+  if (type == PKT_META && len == (int)sizeof(PktMeta)) {
+    memcpy(&linkMeta, data, sizeof(PktMeta));
+  } else if (type == PKT_PIXELS && len >= (int)offsetof(PktPixels, centi)) {
+    const PktPixels *p = (const PktPixels *)data;
+    const int start = p->chunk * LINK_CHUNK_PIXELS;
+    if (p->chunk < LINK_CHUNKS && p->count <= LINK_CHUNK_PIXELS && start + p->count <= SENSOR_PIXELS &&
+        len == (int)offsetof(PktPixels, centi) + p->count * 2) {
+      memcpy(&linkPixels[start], p->centi, p->count * 2);
+      if (p->chunk == LINK_CHUNKS - 1) linkFrameReady = true;
+    }
+  }
+  portEXIT_CRITICAL(&linkLock);
+}
+
+static void initLink() {
+  if (!WIRELESS_SCREEN) return;
+  WiFi.mode(WIFI_STA);
+  esp_wifi_set_channel(WIRELESS_CHANNEL, WIFI_SECOND_CHAN_NONE);
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW failed to start, wireless screen off");
+    return;
+  }
+  esp_now_register_recv_cb(onLinkReceive);
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, BROADCAST_MAC, 6);
+  peer.channel = WIRELESS_CHANNEL;
+  peer.ifidx = WIFI_IF_STA;
+  peer.encrypt = false;
+  linkReady = esp_now_add_peer(&peer) == ESP_OK;
+}
+
+static void linkSend(const void *data, size_t len) {
+  for (int tries = 0; tries < 3; tries++) {
+    if (esp_now_send(BROADCAST_MAC, (const uint8_t *)data, len) != ESP_ERR_ESPNOW_NO_MEM) return;
+    delay(2);  // send queue full: give the radio a moment
+  }
+}
+
+// Camera: a screen said hello in the last 3 s.
+static bool screenListening() { return linkReady && isCamera && lastHelloMs && millis() - lastHelloMs < 3000; }
+
+// Camera: send what is on screen. The screen draws it with the same code.
+static void sendFrame() {
+  static uint16_t frameNo = 0;
+  frameNo++;
+  PktMeta m = {};
+  m.h = {LINK_MAGIC, LINK_VERSION, PKT_META, frameNo};
+  m.palette = paletteIdx;
+  m.flags = (fahrenheit ? 1 : 0) | (markersVisible ? 2 : 0);
+  m.hotIdx = shown.maxIdx;
+  m.coldIdx = shown.minIdx;
+  m.centerT = shown.centerT;
+  m.minT = shown.minT;
+  m.maxT = shown.maxT;
+  m.rangeLo = rangeLo;
+  m.rangeHi = rangeHi;
+  linkSend(&m, sizeof(m));
+
+  PktPixels p;
+  p.h = {LINK_MAGIC, LINK_VERSION, PKT_PIXELS, frameNo};
+  for (int chunk = 0; chunk < LINK_CHUNKS; chunk++) {
+    const int start = chunk * LINK_CHUNK_PIXELS;
+    const int count = min(LINK_CHUNK_PIXELS, SENSOR_PIXELS - start);
+    p.chunk = chunk;
+    p.count = count;
+    for (int i = 0; i < count; i++) {
+      const float v = smoothT[start + i];
+      p.centi[i] = validTemp(v) ? (int16_t)lroundf(v * 100.0f) : INT16_MIN;
+    }
+    linkSend(&p, offsetof(PktPixels, centi) + count * 2);
+  }
+}
+
+// Screen: tell cameras nearby that someone is watching.
+static void sendHello() {
+  const PktHeader h = {LINK_MAGIC, LINK_VERSION, PKT_HELLO, 0};
+  linkSend(&h, sizeof(h));
+}
+
+// Screen: take the newest frame from the camera, if one has arrived.
+static bool takeLinkFrame() {
+  static int16_t px[SENSOR_PIXELS];
+  PktMeta m;
+  portENTER_CRITICAL(&linkLock);
+  const bool ready = linkFrameReady;
+  if (ready) {
+    m = linkMeta;
+    memcpy(px, linkPixels, sizeof(px));
+    linkFrameReady = false;
+  }
+  portEXIT_CRITICAL(&linkLock);
+  if (!ready || m.h.magic != LINK_MAGIC) return false;
+
+  for (int i = 0; i < SENSOR_PIXELS; i++) smoothT[i] = px[i] == INT16_MIN ? NAN : px[i] / 100.0f;
+  paletteIdx = m.palette % PALETTE_COUNT;
+  fahrenheit = m.flags & 1;
+  markersVisible = m.flags & 2;
+  shown.maxIdx = (m.hotIdx >= 0 && m.hotIdx < SENSOR_PIXELS) ? m.hotIdx : -1;
+  shown.minIdx = (m.coldIdx >= 0 && m.coldIdx < SENSOR_PIXELS) ? m.coldIdx : -1;
+  shown.centerT = m.centerT;
+  shown.minT = m.minT;
+  shown.maxT = m.maxT;
+  rangeLo = m.rangeLo;
+  rangeHi = max(m.rangeHi, m.rangeLo + 0.1f);
+  haveFrame = true;
+  return true;
+}
+
+// ============================================================================
 //  Overlays
 // ============================================================================
 
@@ -762,9 +945,9 @@ static int16_t topRightEdge(int16_t y) {
 }
 
 // Battery level with a bolt while charging, or "USB" when there is no battery.
-// Right-aligned at `right`.
-static void drawBattery(int16_t right, int16_t y) {
-  if (!battKnown) return;
+// Right-aligned at `right`; returns its left edge.
+static int16_t drawBattery(int16_t right, int16_t y) {
+  if (!battKnown) return right;
   const bool present = battPresent;
   const int pct = battPercent;
   const bool bolt = battCharging || !present;
@@ -796,6 +979,7 @@ static void drawBattery(int16_t right, int16_t y) {
   gfx->setTextColor(COLOR_WHITE);
   gfx->setCursor(x, y + 6);
   gfx->print(txt);
+  return right - w;
 }
 
 static bool willPowerOff() { return pmuFound && battKnown && battPresent && !vbusPresent; }
@@ -835,8 +1019,10 @@ static void drawOverlays(bool forCapture) {
   drawTemp(boxX + 6, boxY + 6, shown.centerT, 3, COLOR_WHITE);
 
   if (!forCapture) {
-    // Battery top-right; notices (palette, units, saved picture) under it.
-    drawBattery(topRightEdge(boxY), boxY);
+    // Battery top-right, "LIVE" next to it while a wireless screen watches;
+    // notices (palette, units, saved picture) under them.
+    const int16_t battLeft = drawBattery(topRightEdge(boxY), boxY);
+    if (screenListening()) drawLabelRight(battLeft - 4, boxY, "LIVE");
     if ((int32_t)(toastUntil - millis()) > 0) drawLabelRight(topRightEdge(boxY + 34), boxY + 34, toastText);
     if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs);
   }
@@ -1060,6 +1246,7 @@ static void enterViewer() {
 static void exitViewer() {
   mode = MODE_CAMERA;
   screenDirty = true;
+  waitingShown = false;
 }
 
 static void stepPicture(int delta) {
@@ -1106,6 +1293,7 @@ static void wakeScreen() {
   panel->setBrightness(SCREEN_BRIGHTNESS);
   screenDirty = true;
   viewerDirty = true;
+  waitingShown = false;
 }
 
 static void noteActivity() {
@@ -1121,8 +1309,8 @@ static void turnOff() {
     showMessage("Turning off", "Press PWR to turn on.");
     delay(1000);
     panel->setBrightness(0);
-    if (sensorTaskHandle) {
-      powerOffRequested = true;  // the sensor task owns the I2C bus
+    if (boardTaskHandle) {
+      powerOffRequested = true;  // the board task owns the I2C bus
     } else {
       powerOffNow();
     }
@@ -1181,6 +1369,11 @@ static void pollButton() {
     wasDown = down;
     return;
   }
+  if (!isCamera && mode == MODE_CAMERA) {  // palette and units follow the camera
+    if (down && !wasDown) showToast("Set on the camera");
+    wasDown = down;
+    return;
+  }
   if (down && !holdHandled && now - downSince >= 700) {
     holdHandled = true;
     if (mode == MODE_CAMERA) {
@@ -1221,7 +1414,9 @@ void setup() {
   pollBattery();
   initTouch();
   if (!mountSd()) Serial.println("No SD card");
-  startSensor();
+  isCamera = startSensor();
+  initLink();
+  xTaskCreatePinnedToCore(boardTask, "board", 16384, nullptr, 2, &boardTaskHandle, 0);
   lastActivityMs = millis();  // count idle time from when the camera is running
 }
 
@@ -1263,14 +1458,29 @@ void loop() {
     hadVbus = vbusPresent;
     noteActivity();
   }
+  if (screenListening()) lastActivityMs = millis();  // someone is watching remotely
   manageIdle();
 
   // ---- Frames keep flowing in every mode, so the smoothing stays current ----
-  const bool fresh = takeFrame(temps);
+  bool fresh;
+  if (isCamera) {
+    fresh = takeFrame(temps);
+    if (fresh) {
+      processFrame(temps);
+      if (screenListening()) sendFrame();
+    }
+  } else {
+    static uint32_t helloAt = 0;
+    if (linkReady && millis() - helloAt >= 500) {
+      helloAt = millis();
+      sendHello();
+    }
+    fresh = takeLinkFrame();
+    if (fresh) noteActivity();  // a live picture keeps the screen on
+  }
   if (fresh) {
     lastFrameAt = millis();
     stallShown = false;
-    processFrame(temps);
     statsFrames++;
   }
 
@@ -1283,8 +1493,23 @@ void loop() {
     delay(2);
     return;
   }
+  if (!isCamera && (!haveFrame || millis() - lastFrameAt > 1500)) {
+    static uint32_t waitDrawnAt = 0;
+    if (!waitingShown || millis() - waitDrawnAt >= 1000) {  // once a second for the countdown
+      waitingShown = true;
+      waitDrawnAt = millis();
+      drawMessage("Wireless screen",
+                  String(linkReady ? "Waiting for the thermal camera.\nTurn it on nearby." : "Radio failed to start.") +
+                      "\n\n" + sensorlessNote);
+      if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs);
+      gfx->flush();
+      haveFrame = false;
+    }
+    delay(2);
+    return;
+  }
   if (!fresh || !haveFrame) {
-    if (!stallShown && millis() - lastFrameAt > 3000) {
+    if (isCamera && !stallShown && millis() - lastFrameAt > 3000) {
       stallShown = true;
       char err[48] = "";
       if (sensorErrorCount) snprintf(err, sizeof(err), "\n(read error %d)", lastSensorError);
@@ -1298,6 +1523,7 @@ void loop() {
     gfx->fillScreen(COLOR_BLACK);
     screenDirty = false;
   }
+  waitingShown = false;
   drawThermalImage(smoothT, rangeLo, rangeHi);
   drawOverlays(captureRequested);
   gfx->flush();

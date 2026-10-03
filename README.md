@@ -14,6 +14,7 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 - Swipe left to right to look through saved pictures, and right to left to return to the camera.
 - The picture is smoothed over time, so readings and markers stay steady while you aim. In simulation this made the center reading about 3 times steadier, and the markers stopped jumping between equally hot pixels. They still follow a moving object within about 0.1 s.
 - After a minute without use, a 10-second countdown appears. Tap the screen to keep going. Otherwise the camera turns off.
+- A second board with the same firmware and no sensor works as a wireless screen for the camera.
 - The picture updates 16 times a second.
 - Both board revisions work: the original (SH8601 display) and V2 (CO5300 display). The sketch detects which one you have.
 
@@ -40,6 +41,19 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 **Anywhere:** a long PWR press turns the board off (the power chip handles that itself). Tapping the screen keeps the camera on during the auto-off countdown, or wakes a dark screen. A touch or press that wakes the screen does nothing else.
 
 The board remembers your palette and unit choice after power-off.
+
+## Wireless screen
+
+Flash the **same firmware** to a second ESP32-S3-Touch-AMOLED-1.8 that has **no thermal sensor** attached. At startup it looks for a sensor, finds none, and becomes a wireless screen. It then shows the camera's live picture, with the same palette, units, markers and readings.
+
+- No Wi-Fi router or pairing is needed. The boards talk directly over ESP-NOW; expect a range of about a room or more.
+- Before the camera is on, the screen shows **Waiting for the thermal camera**. It shows that page again if the camera turns off or goes out of range.
+- While a screen is listening, the camera shows **LIVE** next to its battery level. The camera only transmits while a screen is listening. It also doesn't auto-off then, because someone is watching it remotely.
+- Palette and °C/°F follow the camera. Change them on the camera; pressing BOOT on the screen's live view just says so.
+- PWR on the screen saves the picture it's showing to the **screen's own** microSD card. Swiping left to right on the screen browses the pictures on that card.
+- The screen keeps itself on while pictures arrive. Once the camera has been gone for a minute, the screen turns off like the camera does.
+- If several cameras are nearby, the screen stays with the first one it hears.
+- The radio uses extra battery on the camera. Set `WIRELESS_SCREEN false` in `config.h` if you never use a second screen. Both boards must use the same `WIRELESS_CHANNEL`.
 
 ## Auto-off
 
@@ -123,6 +137,8 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
 | `SCREEN_BRIGHTNESS` | 200 | 0-255 |
 | `SCREEN_CORNER_RADIUS` | 48 | Size of the screen's rounded corners in pixels. Text near the corners moves inward to clear them. |
 | `START_IN_FAHRENHEIT` | false | Starting unit (the BOOT button overrides it) |
+| `WIRELESS_SCREEN` | true | A board without a sensor becomes a wireless screen for the camera. False turns the radio off. |
+| `WIRELESS_CHANNEL` | 1 | Radio channel 1-13; the same on both boards |
 | `IDLE_OFF_SECONDS` | 60 | Turn off after this many idle seconds (0 = never) |
 | `IDLE_WARNING_SECONDS` | 10 | Length of the "tap screen to keep using" countdown |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |
@@ -139,6 +155,8 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
 - **"Sensor stopped" after it was working:** loose wire, or a long or noisy cable. Keep the sensor wires short.
 - **Checkerboard pattern on moving objects:** the shared bus isn't keeping up with the sensor. Set `SENSOR_REFRESH_HZ` to 8.
 - **Picture lags behind when you pan:** lower `SMOOTHING`. **Still too jumpy:** raise it.
+- **Your camera says "Wireless screen":** it didn't find its sensor at startup, so it switched to screen mode. The I2C line on that page shows what it did find. Check the sensor wires as for "Sensor not found". The screen and the camera must run the same firmware version.
+- **Wireless screen keeps waiting:** turn the camera on, and check both boards use the same `WIRELESS_CHANNEL`. Keep them in the same room at first.
 - **Swipes don't register:** swipe across at least a sixth of the screen, mostly sideways.
 - **Readings seem low on shiny metal:** this is normal for all thermal cameras. Shiny surfaces reflect heat instead of giving it off. Readings assume emissivity 0.95, which is right for skin, wood, paint, plastic and food. Put a piece of matte tape on metal to measure it.
 - The sensor reads about ±1-2 °C absolute. It settles after a few minutes of warm-up.
@@ -151,3 +169,4 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
 - Before the display starts, the sketch pulses the reset lines on the board's IO expander, the same way Waveshare's examples do. Both panels are started with the CO5300 init sequence, as Waveshare's own board driver does. The V2 panel also needs a 16-column offset. The sketch applies it unless the original board's FT3168 touch chip answers.
 - Once running, the sensor task on core 0 is the only code that uses the board's I2C bus. While it waits for the sensor, it also reads the power chip (PWR button and battery) and the touch chip, about 100 times a second. That rate is fast enough to tell taps from swipes. Core 1 reads the results, so no two tasks ever talk on the bus at the same time.
 - The viewer lists `IMG_*.bmp` in the card's `thermal` folder and decodes the chosen one into the frame buffer.
+- Wireless screen: the screen broadcasts a short hello twice a second over ESP-NOW. While the camera hears one, it broadcasts each smoothed frame after processing it: one packet of settings and readouts, then 7 packets of temperatures in 1/100 °C. The screen puts the frame back together and draws it with the same code as the camera. So it matches the camera's screen to within 0.01 °C, apart from the LIVE badge.

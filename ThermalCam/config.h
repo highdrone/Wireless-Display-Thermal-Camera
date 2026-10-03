@@ -41,6 +41,17 @@
 #define SCREEN_CORNER_RADIUS 48
 #define START_IN_FAHRENHEIT false
 
+// ---- Wireless screen -------------------------------------------------------
+// Flash this same firmware to a second ESP32-S3-Touch-AMOLED-1.8 with no
+// thermal sensor: it becomes a wireless screen showing the camera's picture
+// (ESP-NOW radio, no router needed). The camera only transmits while a screen
+// is listening, and doesn't auto-off while one is. The radio does use extra
+// battery; set false to turn it off. A board without a sensor then keeps
+// looking for one instead.
+#define WIRELESS_SCREEN true
+// Radio channel, 1-13. Both boards must use the same one.
+#define WIRELESS_CHANNEL 1
+
 // ---- Auto-off --------------------------------------------------------------
 // Turn off after this many seconds without a button press or screen tap
 // (0 = never). On battery the board powers off; on USB power only the screen
