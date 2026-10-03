@@ -75,6 +75,7 @@
 #define MARKER_HYSTERESIS 0.2f     // C a spot must beat the marked one by to take the marker
 #define SWIPE_MIN_PX 60
 #define TAP_MAX_PX 30
+#define WARNING_BELOW_TEXT 236     // countdown position on text pages, under the text
 
 static const bool SENSOR_ON_BOARD_BUS = (THERMAL_SDA == BOARD_SDA && THERMAL_SCL == BOARD_SCL);
 
@@ -182,6 +183,8 @@ static int16_t linkPixels[SENSOR_PIXELS];
 static bool linkFrameReady = false;
 static uint8_t linkCameraMac[6];
 static volatile uint32_t linkCameraHeardMs = 0;
+static uint32_t lastLinkFrameMs = 0;  // screen: when the last picture arrived
+static bool everConnected = false;    // screen: has had a picture since startup
 
 // Picture viewer.
 static std::vector<uint16_t> pictures;  // numbers of the IMG_####.bmp files, oldest first
@@ -984,14 +987,15 @@ static int16_t drawBattery(int16_t right, int16_t y) {
 
 static bool willPowerOff() { return pmuFound && battKnown && battPresent && !vbusPresent; }
 
-static void drawIdleWarning(uint32_t msLeft) {
+// Centered over the picture, or with its top at `top` (below a text page).
+static void drawIdleWarning(uint32_t msLeft, int16_t top = -1) {
   char line1[24];
   snprintf(line1, sizeof(line1), "%s in %u", willPowerOff() ? "Turning off" : "Screen off",
            (unsigned)((msLeft + 999) / 1000));
   static const char line2[] = "Tap screen to keep using";
   const int16_t w = max<int16_t>(strlen(line1) * 18, strlen(line2) * 12) + 32;
   const int16_t h = 14 + 24 + 12 + 16 + 14;
-  const int16_t x = imgX + (imgW - w) / 2, y = imgY + (imgH - h) / 2;
+  const int16_t x = imgX + (imgW - w) / 2, y = top >= 0 ? top : imgY + (imgH - h) / 2;
   gfx->fillRect(x, y, w, h, COLOR_BLACK);
   gfx->drawRect(x, y, w, h, COLOR_WHITE);
   gfx->setTextColor(COLOR_WHITE);
@@ -1272,7 +1276,7 @@ static void drawViewer() {
   } else {
     drawMessage("Pictures", String(viewerNote) + "\n\nSwipe right to left to go\nback to the camera.");
   }
-  if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs);
+  if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs, viewerHasImage ? -1 : WARNING_BELOW_TEXT);
   gfx->flush();
 }
 
@@ -1320,12 +1324,19 @@ static void turnOff() {
   sleepScreen();
 }
 
+// A wireless screen with no picture to show turns off sooner. Browsing saved
+// pictures on it keeps the normal limit.
+static uint32_t idleLimitMs() {
+  const bool noSignal = !isCamera && mode == MODE_CAMERA && (!lastLinkFrameMs || millis() - lastLinkFrameMs > 1500);
+  return (noSignal ? SCREEN_LINK_TIMEOUT_SECONDS : IDLE_OFF_SECONDS) * 1000UL;
+}
+
 static void manageIdle() {
   const bool wasWarning = idleWarnLeftMs > 0;
   idleWarnLeftMs = 0;
-  if (!screenAsleep && IDLE_OFF_SECONDS > 0) {
+  const uint32_t limit = idleLimitMs();
+  if (!screenAsleep && limit > 0) {
     const uint32_t idle = millis() - lastActivityMs;
-    const uint32_t limit = IDLE_OFF_SECONDS * 1000UL;
     if (idle >= limit) {
       turnOff();
     } else if (idle + IDLE_WARNING_SECONDS * 1000UL >= limit) {
@@ -1476,7 +1487,11 @@ void loop() {
       sendHello();
     }
     fresh = takeLinkFrame();
-    if (fresh) noteActivity();  // a live picture keeps the screen on
+    if (fresh) {
+      noteActivity();  // a live picture keeps the screen on
+      lastLinkFrameMs = millis();
+      everConnected = true;
+    }
   }
   if (fresh) {
     lastFrameAt = millis();
@@ -1499,9 +1514,11 @@ void loop() {
       waitingShown = true;
       waitDrawnAt = millis();
       drawMessage("Wireless screen",
-                  String(linkReady ? "Waiting for the thermal camera.\nTurn it on nearby." : "Radio failed to start.") +
+                  String(!linkReady       ? "Radio failed to start."
+                         : everConnected ? "Lost the camera's signal.\nWaiting for it to come back."
+                                         : "Waiting for the thermal camera.\nTurn it on nearby.") +
                       "\n\n" + sensorlessNote);
-      if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs);
+      if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs, WARNING_BELOW_TEXT);
       gfx->flush();
       haveFrame = false;
     }

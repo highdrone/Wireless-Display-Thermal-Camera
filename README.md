@@ -51,7 +51,10 @@ Flash the **same firmware** to a second ESP32-S3-Touch-AMOLED-1.8 that has **no 
 - While a screen is listening, the camera shows **LIVE** next to its battery level. The camera only transmits while a screen is listening. It also doesn't auto-off then, because someone is watching it remotely.
 - Palette and °C/°F follow the camera. Change them on the camera; pressing BOOT on the screen's live view just says so.
 - PWR on the screen saves the picture it's showing to the **screen's own** microSD card. Swiping left to right on the screen browses the pictures on that card.
-- The screen keeps itself on while pictures arrive. Once the camera has been gone for a minute, the screen turns off like the camera does.
+- The screen stays on while pictures arrive. When they stop, it shows **Lost the camera's signal**. A 10-second countdown starts after 10 seconds, and the screen turns off after 20. Tap it to keep waiting. It also turns off 20 seconds after startup if no camera shows up.
+  - **On battery:** it powers off. Press PWR to turn it back on.
+  - **On USB power:** only its display goes dark, and it comes back by itself when the camera's pictures return.
+- While you browse saved pictures on the screen, the normal 60-second auto-off applies instead.
 - If several cameras are nearby, the screen stays with the first one it hears.
 - The radio uses extra battery on the camera. Set `WIRELESS_SCREEN false` in `config.h` if you never use a second screen. Both boards must use the same `WIRELESS_CHANNEL`.
 
@@ -139,6 +142,7 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
 | `START_IN_FAHRENHEIT` | false | Starting unit (the BOOT button overrides it) |
 | `WIRELESS_SCREEN` | true | A board without a sensor becomes a wireless screen for the camera. False turns the radio off. |
 | `WIRELESS_CHANNEL` | 1 | Radio channel 1-13; the same on both boards |
+| `SCREEN_LINK_TIMEOUT_SECONDS` | 20 | The wireless screen turns off this long after the camera's pictures stop (0 = never) |
 | `IDLE_OFF_SECONDS` | 60 | Turn off after this many idle seconds (0 = never) |
 | `IDLE_WARNING_SECONDS` | 10 | Length of the "tap screen to keep using" countdown |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |

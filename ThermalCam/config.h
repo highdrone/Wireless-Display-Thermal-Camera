@@ -51,6 +51,11 @@
 #define WIRELESS_SCREEN true
 // Radio channel, 1-13. Both boards must use the same one.
 #define WIRELESS_CHANNEL 1
+// The wireless screen turns off this many seconds after pictures from the
+// camera stop (or after startup, if none come), 0 = never. The usual "tap
+// screen to keep using" countdown runs at the end. While you browse saved
+// pictures on it, IDLE_OFF_SECONDS applies instead.
+#define SCREEN_LINK_TIMEOUT_SECONDS 20
 
 // ---- Auto-off --------------------------------------------------------------
 // Turn off after this many seconds without a button press or screen tap
