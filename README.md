@@ -18,6 +18,19 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 - The picture updates 16 times a second.
 - Both board revisions work: the original (SH8601 display) and V2 (CO5300 display). The sketch detects which one you have.
 
+| Wireless screen (right) mirroring the camera (left) | Picture viewer |
+| --- | --- |
+| ![Camera and wireless screen](docs/wireless-screen.png) | ![Picture viewer](docs/picture-viewer.png) |
+
+*Screenshots are simulated, like the preview above.*
+
+## Hardware
+
+- [Waveshare ESP32-S3-Touch-AMOLED-1.8](https://www.waveshare.com/esp32-s3-touch-amoled-1.8.htm), original or V2
+- Waveshare MLX90640 thermal camera module ("MLX9064X Thermal Camera" board), the D55 (55°) or D110 (110°) version
+- Optional: a microSD card (FAT32) for saving pictures, and a LiPo battery for the board's battery connector
+- Optional: a second ESP32-S3-Touch-AMOLED-1.8 to use as a wireless screen
+
 ## Controls
 
 **Camera:**
@@ -174,3 +187,11 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
 - Once running, the sensor task on core 0 is the only code that uses the board's I2C bus. While it waits for the sensor, it also reads the power chip (PWR button and battery) and the touch chip, about 100 times a second. That rate is fast enough to tell taps from swipes. Core 1 reads the results, so no two tasks ever talk on the bus at the same time.
 - The viewer lists `IMG_*.bmp` in the card's `thermal` folder and decodes the chosen one into the frame buffer.
 - Wireless screen: the screen broadcasts a short hello twice a second over ESP-NOW. While the camera hears one, it broadcasts each smoothed frame after processing it: one packet of settings and readouts, then 7 packets of temperatures in 1/100 °C. The screen puts the frame back together and draws it with the same code as the camera. So it matches the camera's screen to within 0.01 °C, apart from the LIVE badge.
+
+## License and credits
+
+- This project is released under the MIT License (see [LICENSE](LICENSE)).
+- The thermal sensor driver in `ThermalCam/src/mlx90640` is [Melexis' MLX90640 library](https://github.com/melexis/mlx90640-library), under the Apache License 2.0.
+- The display code uses [GFX Library for Arduino](https://github.com/moononournation/Arduino_GFX), and the firmware is built on the [Arduino core for the ESP32](https://github.com/espressif/arduino-esp32).
+- Waveshare's examples and board support package were the reference for the board's pins and display startup.
+- This project isn't affiliated with Waveshare or Melexis.
