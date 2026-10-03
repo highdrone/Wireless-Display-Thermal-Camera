@@ -69,3 +69,9 @@
 // stops sensor noise from looking like a rainbow when everything in view is
 // the same temperature.
 #define MIN_SPAN_C 3.0f
+
+// ---- Serial output privacy -------------------------------------------------
+// Leave disabled when sharing logs. These opt-ins expose a unique sensor ID
+// or scene temperatures over USB serial; neither is needed for the display.
+#define LOG_SENSOR_SERIAL false
+#define LOG_THERMAL_STATS false

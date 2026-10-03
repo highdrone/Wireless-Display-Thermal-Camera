@@ -1,5 +1,5 @@
 Melexis MLX90640 driver, from https://github.com/melexis/mlx90640-library
-(commit f6be7ca, Apache License 2.0, see LICENSE).
+(commit f6be7ca1d4a55146b705f3d347f84b773b29cc86, Apache License 2.0, see LICENSE).
 
 Changes: the `#include <...>` lines in MLX90640_API.c use quotes so the files
 build from this folder. MLX90640_I2C_Driver.cpp and mlx90640.h are new: they

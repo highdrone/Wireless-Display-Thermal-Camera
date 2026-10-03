@@ -24,6 +24,24 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 
 *Screenshots are simulated, like the preview above.*
 
+## Safety and privacy first
+
+This is a hobby thermal imager, **not a medical instrument, fire alarm or
+life/safety-critical detector**. Do not rely on it for diagnosis, body-temperature
+screening, fire detection or proving electrical equipment safe. Surface emissivity,
+reflections, distance and sensor warm-up affect readings.
+
+The default wireless-screen mode broadcasts thermal data over **unencrypted,
+unauthenticated ESP-NOW**. There is no secure pairing. Anyone nearby can listen or
+impersonate a camera/screen. Set `WIRELESS_SCREEN false` in `ThermalCam/config.h`
+for sensitive scenes. Saved BMP/CSV captures are unencrypted on microSD and are
+not automatically erased. Current source disables sensor-ID/temperature logging
+by default; do not share identifying debug logs or real captures. See [SECURITY.md](SECURITY.md).
+
+Use **3.3 V** sensor power and logic, common ground, short wires and check the
+silkscreen before soldering. Disconnect power while wiring. This is specifically
+the **1.8-inch AMOLED V1/V2** board, not a round/LCD board.
+
 ## Hardware
 
 - [Waveshare ESP32-S3-Touch-AMOLED-1.8](https://www.waveshare.com/esp32-s3-touch-amoled-1.8.htm), original or V2
@@ -114,7 +132,15 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
 
 ## 3a. Quick flash (no Arduino needed, default settings)
 
-`firmware/ThermalCam-full-flash-at-0x0.bin` is this sketch built with the default `config.h`.
+**Prefer building the current source.** The retained
+`firmware/ThermalCam-full-flash-at-0x0.bin` is an **unverified legacy artifact**,
+not a proven build of the current source; the new source privacy/parser fixes
+are not asserted to be present in it. See [firmware/README.md](firmware/README.md)
+and [firmware/manifest.json](firmware/manifest.json) for the exact hash, length
+and **0x0** merged-image offset. Verify the checksum before using it. A checksum
+is byte identity, not source provenance or safety certification. Flashing can
+replace stored device data; back up only to a private location. The instructions
+below are for an owner choosing to use the legacy image, not an audit test.
 
 1. Open <https://espressif.github.io/esptool-js/> in Chrome or Edge.
 2. Plug in the board and click **Connect**. If no port shows up, unplug, then hold **BOOT** while plugging the board back in.
@@ -136,9 +162,64 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
    | Partition Scheme | 16M Flash (3MB APP/9.9MB FATFS) |
    | **PSRAM** | **OPI PSRAM** ← required. The screen buffer lives in PSRAM. |
 4. Open `ThermalCam/ThermalCam.ino` and click **Upload**.
-5. Optional: open the Serial Monitor at 115200 baud. Every 5 seconds it prints the frame rate and the temperatures.
+5. Optional: open the Serial Monitor at 115200 baud for status messages.
+   Scene-temperature statistics and the unique sensor serial number are disabled
+   by default. Only enable `LOG_THERMAL_STATS` / `LOG_SENSOR_SERIAL` for private debugging.
 
-Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
+The original README recorded esp32 core **3.3.12** with GFX Library for Arduino
+**1.6.8**. That historical claim is not a new hardware or binary-provenance
+certification. Pin both versions rather than silently using an arbitrary `3.x`.
+
+### Reproducible compile recipe (no upload)
+
+Install Arduino CLI, then use these exact dependency versions in your own
+Arduino data directory (these commands download dependencies; they do not flash):
+
+```sh
+arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core install esp32:esp32@3.3.12 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli lib install "GFX Library for Arduino@1.6.8"
+arduino-cli compile --fqbn 'esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi' --build-path /tmp/thermal-camera-build ThermalCam
+```
+
+GFX 1.6.8 corresponds to upstream commit
+`2685a776495be1f9eaf8c572cf876469bcc56585`; the vendored Melexis driver revision
+is recorded in its own README. The sketch entry is `ThermalCam.ino`; implementation
+is ordinary `ThermalCam.cpp`, avoiding Arduino automatic prototype-generation
+differences. All existing wiring and UI/radio defaults are preserved.
+
+Build outputs are private by default. Before distributing a binary, inspect
+embedded paths, IDs and strings; preserve required third-party licenses; record
+the exact source commit, core/library revisions, command, partition layout,
+flash offsets and SHA-256. Custom compiler flags must **preserve the platform's
+required defaults** (for example `-MMD -c` on core 3.0.0); prefix-map personal
+source/toolchain paths when preparing publishable artifacts. Do not mistake a
+standalone application `.bin` for a merged 0x0 image.
+
+### Current verification limits
+
+The October 3, 2026 source check compiled the sketch and bundled Melexis
+translation units with the existing esp32 **3.0.0** toolchain, but the full build
+failed inside GFX 1.6.8: that old core lacks the required ESP-IDF parallel-display
+APIs (`dma_burst_size` / `esp_lcd_i80_alloc_draw_buffer`). **There is no successful
+full-firmware build or hardware test from that audit.** Core 3.3.12 is the pinned
+recipe above, not a newly certified build. Use the documented compatible
+versions; do not remove library code just to manufacture a successful build.
+
+### Offline development checks
+
+```sh
+python3 tools/privacy_check.py
+python3 -m unittest discover -s tests -v
+git diff --check
+```
+
+Requires Python 3.9+ and Clang/GCC with C++11 and address/undefined-behavior
+sanitizers. Tests exercise malformed BMP headers, palette endpoints, privacy
+regressions, preserved defaults, ignore rules and the legacy manifest checksum.
+CI runs these offline checks only; it does not build the ESP32 firmware or test
+a physical board. The worktree privacy checker does not replace a full Git
+history, compressed archive, binary or credential review. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Settings (`ThermalCam/config.h`)
 
@@ -159,6 +240,8 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
 | `IDLE_OFF_SECONDS` | 60 | Turn off after this many idle seconds (0 = never) |
 | `IDLE_WARNING_SECONDS` | 10 | Length of the "tap screen to keep using" countdown |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |
+| `LOG_SENSOR_SERIAL` | false | Print the unique sensor ID over USB serial (private debugging only) |
+| `LOG_THERMAL_STATS` | false | Print scene temperatures and frame rate over USB serial (private debugging only) |
 
 ## Troubleshooting
 
@@ -190,8 +273,8 @@ Tested build: esp32 core 3.3.12, GFX Library for Arduino 1.6.8.
 
 ## License and credits
 
-- This project is released under the MIT License (see [LICENSE](LICENSE)).
+- Original project code is released under the MIT License (see [LICENSE](LICENSE)); existing ownership is preserved and new contributions are credited to ESP32 Thermal Camera contributors.
 - The thermal sensor driver in `ThermalCam/src/mlx90640` is [Melexis' MLX90640 library](https://github.com/melexis/mlx90640-library), under the Apache License 2.0.
 - The display code uses [GFX Library for Arduino](https://github.com/moononournation/Arduino_GFX), and the firmware is built on the [Arduino core for the ESP32](https://github.com/espressif/arduino-esp32).
 - Waveshare's examples and board support package were the reference for the board's pins and display startup.
-- This project isn't affiliated with Waveshare or Melexis.
+- This project isn't affiliated with Waveshare or Melexis. See [THIRD_PARTY.md](THIRD_PARTY.md) for dependency notices and firmware redistribution limits.

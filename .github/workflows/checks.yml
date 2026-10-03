@@ -1,0 +1,22 @@
+name: Offline source checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Privacy regression checks (worktree only)
+        run: python3 tools/privacy_check.py
+      - name: Native parser, palettes and project checks (not an ESP32 build)
+        run: python3 -m unittest discover -s tests -v
+      - name: Whitespace checks
+        run: git diff --check

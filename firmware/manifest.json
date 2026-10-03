@@ -1,0 +1,12 @@
+{
+  "file": "ThermalCam-full-flash-at-0x0.bin",
+  "bytes": 1155072,
+  "sha256": "8cf0bc53a25bc20b4bbe698fb0024ef552ef7dff8ba177f0c8a7b527b96fef49",
+  "flash_offset": "0x0",
+  "board": "Waveshare ESP32-S3-Touch-AMOLED-1.8 (V1 SH8601 / V2 CO5300)",
+  "sensor": "MLX90640",
+  "provenance": "unverified legacy artifact",
+  "source_commit": null,
+  "toolchain": null,
+  "note": "Hash identifies existing bytes only. Neither source correspondence nor hardware behavior is certified. Build current source instead."
+}

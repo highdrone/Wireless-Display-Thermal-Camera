@@ -14,6 +14,7 @@
  * limitations under the License.
  *
  */
+// Modified for Arduino packaging: use local quoted driver/header includes.
 #include "MLX90640_I2C_Driver.h"
 #include "MLX90640_API.h"
 #include <math.h>
