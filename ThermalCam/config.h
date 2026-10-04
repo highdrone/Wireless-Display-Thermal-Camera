@@ -56,6 +56,14 @@
 // screen to keep using" countdown runs at the end. While you browse saved
 // pictures on it, IDLE_OFF_SECONDS applies instead.
 #define SCREEN_LINK_TIMEOUT_SECONDS 20
+// On battery, a wireless screen that times out goes into standby instead of
+// switching off: every SCREEN_STANDBY_CHECK_SECONDS it wakes for a moment to
+// ask whether the camera is on, and turns back on when it is. A tap, BOOT or
+// PWR (picked up at the next check) also turns it on. After
+// SCREEN_STANDBY_MINUTES without the camera it switches off completely.
+// 0 minutes = switch off straight away.
+#define SCREEN_STANDBY_CHECK_SECONDS 5
+#define SCREEN_STANDBY_MINUTES 30
 
 // ---- Auto-off --------------------------------------------------------------
 // Turn off after this many seconds without a button press or screen tap

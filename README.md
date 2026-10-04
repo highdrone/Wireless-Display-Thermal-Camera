@@ -83,8 +83,8 @@ Flash the **same firmware** to a second ESP32-S3-Touch-AMOLED-1.8 that has **no 
 - Palette and °C/°F follow the camera. Change them on the camera; pressing BOOT on the screen's live view just says so.
 - PWR on the screen saves the picture it's showing to the **screen's own** microSD card. Swiping left to right on the screen browses the pictures on that card.
 - The screen stays on while pictures arrive. When they stop, it shows **Lost the camera's signal**. A 10-second countdown starts after 10 seconds, and the screen turns off after 20. Tap it to keep waiting. It also turns off 20 seconds after startup if no camera shows up.
-  - **On battery:** it powers off. Press PWR to turn it back on.
-  - **On USB power:** only its display goes dark, and it comes back by itself when the camera's pictures return.
+  - **On battery:** it goes into **standby**. Every 5 seconds it wakes for a moment and asks whether the camera is on, so it turns back on by itself within about 5 seconds of the camera turning on. A tap or BOOT turns it on straight away; PWR works too, but is only noticed at the next check. After 30 minutes in standby without the camera, it powers off completely; then press PWR to turn it on.
+  - **On USB power:** only its display goes dark, and it comes back by itself as soon as the camera's pictures return.
 - While you browse saved pictures on the screen, the normal 60-second auto-off applies instead.
 - If several cameras are nearby, the screen stays with the first one it hears.
 - The radio uses extra battery on the camera. Set `WIRELESS_SCREEN false` in `config.h` if you never use a second screen. Both boards must use the same `WIRELESS_CHANNEL`.
@@ -242,6 +242,8 @@ history, compressed archive, binary or credential review. See [CONTRIBUTING.md](
 | `WIRELESS_SCREEN` | true | A board without a sensor becomes a wireless screen for the camera. False turns the radio off. |
 | `WIRELESS_CHANNEL` | 1 | Radio channel 1-13; the same on both boards |
 | `SCREEN_LINK_TIMEOUT_SECONDS` | 20 | The wireless screen turns off this long after the camera's pictures stop (0 = never) |
+| `SCREEN_STANDBY_CHECK_SECONDS` | 5 | In standby, the wireless screen checks for the camera this often. Shorter turns on sooner but uses more battery. |
+| `SCREEN_STANDBY_MINUTES` | 30 | The wireless screen powers off completely after this long in standby (0 = no standby, power off straight away) |
 | `IDLE_OFF_SECONDS` | 60 | Turn off after this many idle seconds (0 = never) |
 | `IDLE_WARNING_SECONDS` | 10 | Length of the "tap screen to keep using" countdown |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |
@@ -275,6 +277,7 @@ history, compressed archive, binary or credential review. See [CONTRIBUTING.md](
 - Once running, the sensor task on core 0 is the only code that uses the board's I2C bus. While it waits for the sensor, it also reads the power chip (PWR button and battery) and the touch chip, about 100 times a second. That rate is fast enough to tell taps from swipes. Core 1 reads the results, so no two tasks ever talk on the bus at the same time.
 - The viewer lists `IMG_*.bmp` in the card's `thermal` folder and decodes the chosen one into the frame buffer.
 - Wireless screen: the screen broadcasts a short hello twice a second over ESP-NOW. While the camera hears one, it broadcasts each smoothed frame after processing it: one packet of settings and readouts, then 7 packets of temperatures in 1/100 °C. The screen puts the frame back together and draws it with the same code as the camera. So it matches the camera's screen to within 0.01 °C, apart from the LIVE badge.
+- Standby: the screen's chip goes into deep sleep with its display off, and a timer wakes it every few seconds. It sends a "probe" hello and listens for half a second. The camera answers a probe with one frame but doesn't count it as a viewer, so a sleeping screen doesn't keep the camera from auto-off. The touch interrupt and BOOT can also wake the chip. The PWR button can't, because it goes to the power chip, which only latches the press until the next check.
 
 ## License and credits
 

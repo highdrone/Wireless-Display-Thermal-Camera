@@ -24,6 +24,9 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
+#include <esp_sleep.h>
+#include <driver/rtc_io.h>
+#include <driver/gpio.h>
 #include <algorithm>
 #include <vector>
 
@@ -177,6 +180,8 @@ struct __attribute__((packed)) PktPixels {  // temperatures in 1/100 C, INT16_MI
 static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static bool linkReady = false;
 static volatile uint32_t lastHelloMs = 0;  // camera: when a screen last said hello
+static volatile bool probeReplyDue = false;  // camera: a sleeping screen asked "are you on?"
+#define HELLO_PROBE 1  // PktHeader.frame of a hello from a screen in standby
 // Screen: the newest frame from the camera, filled in by the receive callback.
 static portMUX_TYPE linkLock = portMUX_INITIALIZER_UNLOCKED;
 static PktMeta linkMeta;
@@ -194,6 +199,11 @@ static uint16_t *viewerImage = nullptr;  // decoded picture, laid out like the f
 static bool viewerHasImage = false;
 static bool viewerDirty = false;
 static const char *viewerNote = "";
+
+// Wireless screen standby, kept in RTC memory through deep sleep.
+RTC_DATA_ATTR static bool rtcStandby = false;        // asleep, waiting for the camera
+RTC_DATA_ATTR static uint32_t rtcStandbyChecks = 0;  // listening wake-ups so far
+RTC_DATA_ATTR static char rtcSensorlessNote[96];     // the screen's I2C line, for after waking
 
 // Auto-off.
 static uint32_t lastActivityMs = 0;
@@ -765,7 +775,15 @@ static void onLinkReceive(const esp_now_recv_info_t *info, const uint8_t *data, 
   if (len < (int)sizeof(PktHeader) || data[0] != LINK_MAGIC || data[1] != LINK_VERSION) return;
   const uint8_t type = data[2];
   if (isCamera) {
-    if (type == PKT_HELLO) lastHelloMs = millis();
+    if (type == PKT_HELLO) {
+      // A standby screen's quick check gets one frame back, but doesn't count
+      // as someone watching (that would keep the camera from auto-off).
+      if (((const PktHeader *)data)->frame == HELLO_PROBE) {
+        probeReplyDue = true;
+      } else {
+        lastHelloMs = millis();
+      }
+    }
     return;
   }
   if (type != PKT_META && type != PKT_PIXELS) return;
@@ -791,7 +809,7 @@ static void onLinkReceive(const esp_now_recv_info_t *info, const uint8_t *data, 
 }
 
 static void initLink() {
-  if (!WIRELESS_SCREEN) return;
+  if (!WIRELESS_SCREEN || linkReady) return;
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(WIRELESS_CHANNEL, WIFI_SECOND_CHAN_NONE);
   if (esp_now_init() != ESP_OK) {
@@ -850,8 +868,8 @@ static void sendFrame() {
 }
 
 // Screen: tell cameras nearby that someone is watching.
-static void sendHello() {
-  const PktHeader h = {LINK_MAGIC, LINK_VERSION, PKT_HELLO, 0};
+static void sendHello(bool probe = false) {
+  const PktHeader h = {LINK_MAGIC, LINK_VERSION, PKT_HELLO, (uint16_t)(probe ? HELLO_PROBE : 0)};
   linkSend(&h, sizeof(h));
 }
 
@@ -991,11 +1009,14 @@ static int16_t drawBattery(int16_t right, int16_t y) {
 }
 
 static bool willPowerOff() { return pmuFound && battKnown && battPresent && !vbusPresent; }
+// A wireless screen on battery goes into standby rather than off (see turnOff).
+static bool willStandby() { return willPowerOff() && !isCamera && linkReady && SCREEN_STANDBY_MINUTES > 0; }
 
 // Centered over the picture, or with its top at `top` (below a text page).
 static void drawIdleWarning(uint32_t msLeft, int16_t top = -1) {
   char line1[24];
-  snprintf(line1, sizeof(line1), "%s in %u", willPowerOff() ? "Turning off" : "Screen off",
+  snprintf(line1, sizeof(line1), "%s in %u",
+           willStandby() ? "Standby" : willPowerOff() ? "Turning off" : "Screen off",
            (unsigned)((msLeft + 999) / 1000));
   static const char line2[] = "Tap screen to keep using";
   const int16_t w = max<int16_t>(strlen(line1) * 18, strlen(line2) * 12) + 32;
@@ -1312,10 +1333,89 @@ static void noteActivity() {
   if (screenAsleep) wakeScreen();
 }
 
-// On battery the board powers off (PWR turns it back on). On USB power only
-// the screen goes off: with USB power present the power chip may switch
-// straight back on.
+// Deep sleep until the next standby check, a screen tap or BOOT. The display
+// is already off; its chip-select is held high so it ignores the bus.
+static void deepSleepStandby() {
+  esp_sleep_enable_timer_wakeup(SCREEN_STANDBY_CHECK_SECONDS * 1000000ULL);
+  pinMode(TP_INT, INPUT_PULLUP);
+  uint64_t wakePins = 1ULL << BOOT_BUTTON;
+  if (digitalRead(TP_INT) == HIGH) wakePins |= 1ULL << TP_INT;  // only if idle, or it would wake at once
+  esp_sleep_enable_ext1_wakeup(wakePins, ESP_EXT1_WAKEUP_ANY_LOW);
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);  // keeps the pull-ups below
+  rtc_gpio_pullup_en((gpio_num_t)BOOT_BUTTON);
+  rtc_gpio_pulldown_dis((gpio_num_t)BOOT_BUTTON);
+  rtc_gpio_pullup_en((gpio_num_t)TP_INT);
+  rtc_gpio_pulldown_dis((gpio_num_t)TP_INT);
+  pinMode(LCD_CS, OUTPUT);
+  digitalWrite(LCD_CS, HIGH);
+  gpio_hold_en((gpio_num_t)LCD_CS);
+  gpio_deep_sleep_hold_en();
+  Serial.flush();
+  esp_deep_sleep_start();
+}
+
+// A wireless screen on battery waits in standby instead of switching off, so
+// it can come back on by itself when the camera does.
+static void enterStandby() {
+  showMessage("Standby", "Turns on when the camera does.\nTap the screen or press BOOT\nto turn it on now.");
+  delay(2000);
+  panel->setBrightness(0);
+  panel->displayOff();
+  rtcStandby = true;
+  rtcStandbyChecks = 0;
+  strlcpy(rtcSensorlessNote, sensorlessNote.c_str(), sizeof(rtcSensorlessNote));
+  deepSleepStandby();
+}
+
+// Runs first thing after a standby wake-up. Returns true when the board should
+// start up as a wireless screen (camera found, or a tap / button woke it).
+// Otherwise it goes back to sleep and never returns. After a cold start it
+// just returns false.
+static bool standbyCheck() {
+  gpio_hold_dis((gpio_num_t)LCD_CS);
+  gpio_deep_sleep_hold_dis();
+  if (!rtcStandby) return false;
+  if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_TIMER) {  // tap or BOOT
+    rtcStandby = false;
+    return true;
+  }
+
+  // A PWR press while asleep is latched by the power chip: pick it up here.
+  Wire.begin(BOARD_SDA, BOARD_SCL, 400000);
+  uint8_t st;
+  if (i2cReadReg(AXP2101_ADDR, AXP2101_INTSTS2, st) && (st & AXP2101_PKEY_SHORT)) {
+    rtcStandby = false;
+    return true;
+  }
+
+  // Ask "camera, are you on?" and listen for up to ~0.45 s.
+  isCamera = false;
+  initLink();
+  for (int i = 0; i < 3 && linkReady && !linkCameraHeardMs; i++) {
+    sendHello(true);
+    const uint32_t t0 = millis();
+    while (!linkCameraHeardMs && millis() - t0 < 150) delay(5);
+  }
+  if (linkCameraHeardMs) {
+    rtcStandby = false;
+    return true;
+  }
+
+  if (++rtcStandbyChecks * (uint32_t)SCREEN_STANDBY_CHECK_SECONDS >= SCREEN_STANDBY_MINUTES * 60UL) {
+    rtcStandby = false;  // waited long enough: switch off for real
+    powerOffNow();
+    delay(2000);
+    return true;  // still running, so USB power must be present: start normally
+  }
+  deepSleepStandby();
+  return false;  // not reached
+}
+
+// On battery the board powers off (PWR turns it back on); a wireless screen
+// goes into standby instead. On USB power only the screen goes off: with USB
+// power present the power chip may switch straight back on.
 static void turnOff() {
+  if (willStandby()) enterStandby();
   if (willPowerOff()) {
     showMessage("Turning off", "Press PWR to turn on.");
     delay(1000);
@@ -1416,6 +1516,7 @@ static void pollButton() {
 
 void setup() {
   Serial.begin(115200);
+  const bool wokeAsScreen = standbyCheck();  // may go back to sleep instead of returning
   pinMode(BOOT_BUTTON, INPUT_PULLUP);
 
   if (!initDisplay()) {
@@ -1432,7 +1533,12 @@ void setup() {
   pollBattery();
   initTouch();
   if (!mountSd()) Serial.println("No SD card");
-  isCamera = startSensor();
+  if (wokeAsScreen) {  // known to be a screen: skip looking for the sensor
+    isCamera = false;
+    sensorlessNote = rtcSensorlessNote;
+  } else {
+    isCamera = startSensor();
+  }
   initLink();
   xTaskCreatePinnedToCore(boardTask, "board", 16384, nullptr, 2, &boardTaskHandle, 0);
   lastActivityMs = millis();  // count idle time from when the camera is running
@@ -1485,7 +1591,8 @@ void loop() {
     fresh = takeFrame(temps);
     if (fresh) {
       processFrame(temps);
-      if (screenListening()) sendFrame();
+      if (screenListening() || probeReplyDue) sendFrame();
+      probeReplyDue = false;
     }
   } else {
     static uint32_t helloAt = 0;
