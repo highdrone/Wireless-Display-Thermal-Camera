@@ -2,21 +2,21 @@
   "schema_version": 2,
   "file": "ThermalCam-full-flash-at-0x0.bin",
   "bytes": 16777216,
-  "sha256": "a2c0a4e43a25186448d71794e88cacdbf392497f3301813ef07890e6a023c930",
+  "sha256": "8704ae77ceb5193a72d2bee500bdec6fb3fcaa182deac8c13cdbececec962acf",
   "flash_offset": "0x0",
   "board": "Waveshare ESP32-S3-Touch-AMOLED-1.8 (V1 SH8601 / V2 CO5300)",
   "sensor": "MLX90640",
   "provenance": "compiled from attested source; offline verified; no hardware test",
-  "source_commit": "824933755386262ea5472ff1e908bb8ddc78c97e",
+  "source_commit": "55a4370d302cd2e7d74ab8f39f7849c4b1f6929e",
   "source_tree": {
     "path": "ThermalCam",
-    "git_tree": "42e38bc67e21dac0417539ebf333fe9203ad3f26",
+    "git_tree": "37b553876f4e281aaeca55a1c99255d92086ca01",
     "files": [
       {
         "path": "ThermalCam/ThermalCam.cpp",
-        "git_blob": "248a283163c30cd0129676b3c397b29caf4b87c7",
-        "bytes": 55668,
-        "sha256": "ef3b3d3449777000b406d66af49eac9fdb3c4ca4aeca2876ab24723201a122ee"
+        "git_blob": "3cdaf635836f099f2cac7b86a28f324d736b6384",
+        "bytes": 60122,
+        "sha256": "9e6ff27a05cc2a7518492258b11fb85b040a3292fd03845b88259f2160fc00ed"
       },
       {
         "path": "ThermalCam/ThermalCam.ino",
@@ -32,9 +32,9 @@
       },
       {
         "path": "ThermalCam/config.h",
-        "git_blob": "b701768c2a65d3e1c31fd53051aefdc726937289",
-        "bytes": 3869,
-        "sha256": "4ff1748526057737c31c59af57d9344e75285593c0ea89af14010b3f8fafb337"
+        "git_blob": "3969d6355de7cddb933539c2974e486be79da63b",
+        "bytes": 4350,
+        "sha256": "27d3978d46b4ad38e89b2668ebd60f6165981cfee116e39c6cb02ba3655b5d68"
       },
       {
         "path": "ThermalCam/palettes.h",
@@ -87,15 +87,14 @@
     ]
   },
   "build": {
-    "date": "2026-10-03",
-    "host": "macOS arm64",
+    "date": "2026-10-04",
+    "host": "Linux x86_64",
     "arduino_cli": "1.5.1",
-    "arduino_cli_sha256": "171f87fd64b4a3bdcfbc4493d8e72ea006bb6d572c69bfac6359b1ad3e494580",
     "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi",
     "source_date_epoch": 1791051543,
     "jobs": 2,
     "recipe": "firmware/BUILDING.md",
-    "local_environment": "env -i; minimal PATH; isolated HOME/TMPDIR; LANG=C; LC_ALL=C; TZ=UTC",
+    "local_environment": "env -i; minimal PATH (/usr/bin:/bin); isolated HOME/TMPDIR; LANG=C; LC_ALL=C; TZ=UTC",
     "path_maps": {
       "source": "/src/esp32-thermal-camera",
       "dependency_state": "/toolchain",
@@ -103,12 +102,12 @@
     },
     "platform_compiler_flags": "compiler.c.flags/compiler.cpp.flags retained, including -MMD -c; only extra_flags override",
     "application_elf": {
-      "bytes": 18107164,
-      "sha256": "3d9a2b8f7131e1532d5099e24c086478ab92c19a14e0cd16e7e739c2588bd8a6"
+      "bytes": 18209716,
+      "sha256": "8569a601f95c41bcc7592618cfd7699e34e680d06d46ee34643251e30575ee69"
     },
     "application": {
-      "bytes": 1087312,
-      "sha256": "5aed0a593677b9bdaab176e03188cf5f81022d7d7228ccbb69c4a7258f5c653b"
+      "bytes": 1098352,
+      "sha256": "e6eee7fdc48879a86ae0d34cd229f5b89a26dc2c2d2ac15c0f38e7d51fb4d7f7"
     },
     "repeat_build": {
       "full_compiles": 2,
@@ -117,7 +116,7 @@
       "elf_byte_identical": true,
       "application_byte_identical": true,
       "merged_byte_identical": true,
-      "scope": "same macOS arm64 host, pinned dependencies and fixed epoch; no cross-host guarantee"
+      "scope": "same Linux x86_64 host, pinned dependencies and fixed epoch; no cross-host guarantee"
     },
     "app_descriptor": {
       "version": "6671d0b",
@@ -126,7 +125,27 @@
       "date": "Sep 16 2026",
       "idf_version": "v5.5.5"
     },
-    "app_descriptor_note": "Inherited precompiled SDK project/version/time fields, not thermal source identity. Embedded ELF SHA-256 matches actual build ELF."
+    "app_descriptor_note": "Inherited precompiled SDK project/version/time fields, not thermal source identity. Embedded ELF SHA-256 matches actual build ELF.",
+    "arduino_cli_binary": {
+      "sha256": "edc7cf304f7a2696cc442ed730a9975007947886a0f96f8240d87ca05907e9f0",
+      "built_from": "https://github.com/arduino/arduino-cli tag v1.5.1",
+      "source_commit": "01f3d4f2ba7c2eaafb5dc710c8a1903af7762fea",
+      "go": "1.26.1",
+      "ldflags": "versionString=1.5.1, commit=01f3d4f, date=2026-06-05T09:39:33Z",
+      "note": "Compiled from the tagged source because the release download was unreachable from the build host. An official Arduino CLI 1.3.1 binary produced byte-identical ELF, application and merged images from the same source."
+    },
+    "host_os_label": "The Arduino core embeds the build host OS name (ARDUINO_HOST_OS: \"linux\" here, \"macosx\" in the previous image) in the application. Images built from the same source on different host operating systems therefore differ in that string, in the addresses after it, and in the ELF hash.",
+    "cross_check_previous_source": {
+      "source_commit": "824933755386262ea5472ff1e908bb8ddc78c97e",
+      "git_tree": "42e38bc67e21dac0417539ebf333fe9203ad3f26",
+      "published_application_sha256": "5aed0a593677b9bdaab176e03188cf5f81022d7d7228ccbb69c4a7258f5c653b",
+      "published_elf_sha256": "3d9a2b8f7131e1532d5099e24c086478ab92c19a14e0cd16e7e739c2588bd8a6",
+      "bootloader_and_partition_table": "byte-identical to the published image",
+      "application_as_built_here": "same length; differs by the host OS label and the address shifts that follow it",
+      "application_with_host_label_overridden": "Diagnostic only (--build-property runtime.os=macosx): every byte matched the published application except the embedded ELF SHA-256 in the app descriptor and the image's trailing SHA-256 digest. The ELF itself differs; the cause was not isolated.",
+      "diagnostic_elf_sha256": "faa505aee282d90f884adbdbb5b0d20a5e60dd8077bcb3b5440bb0538ac46ee9",
+      "conclusion": "This host and the macOS arm64 host compile and link the same code and data from the same pinned inputs."
+    }
   },
   "dependencies": {
     "esp32_core": {
@@ -153,7 +172,8 @@
       "version": "1.6.8",
       "source_commit": "2685a776495be1f9eaf8c572cf876469bcc56585",
       "url": "https://codeload.github.com/moononournation/Arduino_GFX/zip/2685a776495be1f9eaf8c572cf876469bcc56585",
-      "archive_sha256": "22f7ade4bd0b5efc65380941418932723360780f1498721d06820b779fdd140b"
+      "archive_sha256": "22f7ade4bd0b5efc65380941418932723360780f1498721d06820b779fdd140b",
+      "fetched_for_this_build": "git fetch of commit 2685a776495be1f9eaf8c572cf876469bcc56585 (the codeload archive was unreachable from this host); content verified by the git commit hash, not by archive_sha256. The repository has no .gitattributes, so the archive holds the same file tree."
     },
     "melexis": {
       "source_commit": "f6be7ca1d4a55146b705f3d347f84b773b29cc86",
@@ -177,30 +197,30 @@
         "name": "esp32s3-libs"
       },
       {
-        "archive": "xtensa-esp-elf-14.2.0_20260121-aarch64-apple-darwin.tar.gz",
-        "sha256": "763755178c15299f8d6f3c88b121f9f43d06be499f11be4a5de51bf3e75b3022",
-        "bytes": 326793686,
-        "url": "https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20260121/xtensa-esp-elf-14.2.0_20260121-aarch64-apple-darwin.tar.gz",
+        "archive": "xtensa-esp-elf-14.2.0_20260121-x86_64-linux-gnu.tar.gz",
+        "sha256": "4e090a6cbf1ff7769684d9a248c9b8bdbe4c0ada098adda54b4c67a91449afa7",
+        "bytes": 334265784,
+        "url": "https://github.com/espressif/crosstool-NG/releases/download/esp-14.2.0_20260121/xtensa-esp-elf-14.2.0_20260121-x86_64-linux-gnu.tar.gz",
         "version": "2601",
         "name": "esp-x32"
       },
       {
-        "archive": "esptool-v5.3.1-macos-arm64.tar.gz",
-        "sha256": "f63f7203d88cfe4c17aea34d6cf82769458ce204e49a05816c6384c2d299e6ca",
-        "bytes": 61218014,
-        "url": "https://github.com/espressif/esptool/releases/download/v5.3.1/esptool-v5.3.1-macos-arm64.tar.gz",
+        "archive": "esptool-v5.3.1-linux-amd64.tar.gz",
+        "sha256": "e9cc641f8e4a0b644b52836d7a6b59f3c6d3261213c5ccc41f8f3c3035d06aa4",
+        "bytes": 83577947,
+        "url": "https://github.com/espressif/esptool/releases/download/v5.3.1/esptool-v5.3.1-linux-amd64.tar.gz",
         "version": "5.3.1",
         "name": "esptool_py"
       },
       {
-        "archive": "ctags-5.8-arduino11-pm-x86_64-apple-darwin.zip",
-        "sha256": "bf74807260ddf0e1fc94d67e9cd8a41b7c0a2f0bee03e254e6975139b37ef250",
-        "bytes": 118296,
-        "url": "https://downloads.arduino.cc/tools/ctags-5.8-arduino11-pm-x86_64-apple-darwin.zip",
+        "name": "ctags",
         "version": "5.8-arduino11",
-        "name": "ctags"
+        "built_from": "https://github.com/arduino/ctags tag 5.8-arduino11 (abc8fca7499f44c725122881cd380a88c37abe0e)",
+        "note": "Compiled locally with build-only macro renames for a current host compiler; the release download was unreachable. It only generates prototypes for .ino code, and ThermalCam.ino holds none."
       }
-    ]
+    ],
+    "package_index": "Official package_esp32_index.json (espressif/arduino-esp32 gh-pages). All archive checksums below match it. The core was installed offline through a trimmed copy listing only esp32:esp32@3.3.12 and the esp-x32, esptool_py and esp32s3-libs tools an ESP32-S3 build uses, with the same URLs, sizes and checksums.",
+    "previous_build_host_archives": "The previous image used the macOS arm64 builds of the Xtensa toolchain and esptool; see git history of this file."
   },
   "components": [
     {
@@ -228,8 +248,8 @@
       "role": "application",
       "build_file": "ThermalCam.ino.bin",
       "flash_offset": "0x10000",
-      "bytes": 1087312,
-      "sha256": "5aed0a593677b9bdaab176e03188cf5f81022d7d7228ccbb69c4a7258f5c653b"
+      "bytes": 1098352,
+      "sha256": "e6eee7fdc48879a86ae0d34cd229f5b89a26dc2c2d2ac15c0f38e7d51fb4d7f7"
     }
   ],
   "partitions": [
@@ -305,8 +325,14 @@
     ],
     "ota_data_note": "SDK boot_app0.bin is intentional, not blank device NVS.",
     "hardware_tested": false,
-    "binary_privacy_scope": "raw, printable, UTF-16 LE/BE on both alignments and bounded offline scanners; no local home paths/private identities/emails/tokens/device MACs found; heuristic not proof of absence",
+    "binary_privacy_scope": "raw, printable, UTF-16 LE/BE on both alignments with tools/privacy_check.py rules plus local path/identity markers; no local home paths/private identities/emails/tokens/device MACs found; build paths are only the mapped /toolchain prefix; heuristic not proof of absence",
     "entropy_classification": "independent release-review gate; compile/source attestation is not entropy certification"
+  },
+  "previous_attested": {
+    "sha256": "a2c0a4e43a25186448d71794e88cacdbf392497f3301813ef07890e6a023c930",
+    "bytes": 16777216,
+    "source_commit": "824933755386262ea5472ff1e908bb8ddc78c97e",
+    "note": "Previous source-attested image (macOS arm64 build), preserved privately before replacement. See build.cross_check_previous_source."
   },
   "legacy": {
     "replaced_current_sha256": "8cf0bc53a25bc20b4bbe698fb0024ef552ef7dff8ba177f0c8a7b527b96fef49",
@@ -314,10 +340,10 @@
     "source_correspondence": "unproven; no legacy bitwise reproduction claimed; earlier Git history untouched"
   },
   "limits": [
-    "No board access, flash, upload, serial or hardware test.",
+    "No board access, flash, upload, serial or hardware test of this image.",
     "Default ESP-NOW is unauthenticated and unencrypted broadcast.",
     "Current binary source mapping does not establish historical binary/source correspondence.",
-    "Two identical local builds are not a cross-machine or all-future-download reproducibility guarantee.",
+    "Two identical local builds are not a cross-machine or all-future-download reproducibility guarantee; builds on different host operating systems differ in the embedded host OS label.",
     "Manifest is an external source attestation; inherited SDK app-description fields alone are not source provenance.",
     "Required notices and pinned source/rebuild references are retained; no complete binary license-compliance certification or exhaustive SBOM is claimed."
   ]

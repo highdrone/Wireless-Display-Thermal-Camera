@@ -25,8 +25,11 @@ commit.
 - `WIRELESS_SCREEN` defaults to `true` for compatibility. ESP-NOW broadcasts are
   unencrypted and unauthenticated. A nearby listener can receive thermal data;
   another transmitter can impersonate a screen or camera. The first-camera
-  selection is not secure pairing. Set `WIRELESS_SCREEN false` to disable this
-  firmware's radio link; do not use the link for sensitive scenes.
+  selection is not secure pairing. A wireless screen in battery standby wakes
+  every few seconds to broadcast a probe, and turns on for any nearby device that
+  answers like a camera, which can also run down its battery. Set
+  `WIRELESS_SCREEN false` to disable this firmware's radio link; do not use the
+  link for sensitive scenes.
 - There is no router password, cloud account, Internet upload, telemetry service
   or remote firmware updater in the application source. Dependency behavior
   and future changes still require review.

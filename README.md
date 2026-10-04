@@ -133,8 +133,9 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
 ## 3a. Quick flash (no Arduino needed, default settings)
 
 `firmware/ThermalCam-full-flash-at-0x0.bin` is a new **source-attested build**
-of commit `824933755386262ea5472ff1e908bb8ddc78c97e`, using core **3.3.12**
-and GFX **1.6.8** with the parser hardening and private logging defaults.
+of commit `55a4370d302cd2e7d74ab8f39f7849c4b1f6929e`, using core **3.3.12**
+and GFX **1.6.8** with the parser hardening, private logging defaults and
+wireless-screen standby. Flash the same file to the camera and to a wireless screen.
 Two independent local compiles produced identical ELF, application and merged
 bytes. See [firmware/manifest.json](firmware/manifest.json) for provenance and
 [firmware/README.md](firmware/README.md) for the exact checksum and **0x0** offset.
@@ -174,7 +175,7 @@ The following steps are owner-operated flashing instructions, not an audit test.
 
 ### Pinned release build (no upload)
 
-The complete October 3, 2026 build passed with Arduino CLI **1.5.1**, esp32 core
+The complete October 4, 2026 build (Linux x86_64) passed with Arduino CLI **1.5.1**, esp32 core
 **3.3.12**, ESP-IDF **5.5.5**, Xtensa GCC **14.2.0**, esptool **5.3.1** and GFX
 **1.6.8** (revision `2685a776495be1f9eaf8c572cf876469bcc56585`).
 The exact board options are:
@@ -192,9 +193,13 @@ implementation in `ThermalCam.cpp`; wiring/UI/radio/power defaults are preserved
 
 Two full compiles in separate new output directories and separate initially
 empty core caches produced **byte-identical ELF, app, bootloader, partition,
-boot-app0 and merged images** on the same macOS arm64 host. This is a measured
+boot-app0 and merged images** on the same Linux x86_64 host. This is a measured
 local repeatability result, not a cross-host or indefinite bitwise-reproducibility
-guarantee. The manifest records source commit/tree/files, relevant dependency
+guarantee. The core embeds the build host's OS name, so builds on different host
+operating systems differ in that string. With only that label overridden, a
+Linux rebuild of the previous macOS-built source matched every application byte
+except the embedded ELF hash (see [firmware/README.md](firmware/README.md)).
+The manifest records source commit/tree/files, relevant dependency
 archive hashes, actual ELF/app/merged SHA-256, verified offsets and blank NVS.
 Its preceding source commit avoids circular manifest self-reference.
 
