@@ -6,6 +6,12 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 
 *Simulated preview with a fake scene (a person, a hot mug, a cold can, a cold window). It was made by running this sketch's drawing code on a PC.*
 
+## User guide
+
+**[Download the illustrated user guide (PDF, 12 pages)](docs/user-guide.pdf)**: reading the screen, controls, palettes, saving and viewing pictures, the wireless screen, standby, auto-off, accurate readings, troubleshooting and updating the firmware.
+
+[![Pages from the user guide](docs/user-guide-preview.png)](docs/user-guide.pdf)
+
 - The 32×24 sensor image is upscaled to fill the screen (448×336, landscape).
 - Top left: temperature at the crosshair (the center of the image).
 - Red ring: the hottest spot. Blue ring: the coldest spot. Their temperatures are at the right and left ends of the bar at the bottom, in the same colors.
@@ -14,7 +20,7 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 - Swipe left to right to look through saved pictures, and right to left to return to the camera.
 - The picture is smoothed over time, so readings and markers stay steady while you aim. In simulation this made the center reading about 3 times steadier, and the markers stopped jumping between equally hot pixels. They still follow a moving object within about 0.1 s.
 - After a minute without use, a 10-second countdown appears. Tap the screen to keep going. Otherwise the camera turns off.
-- A second board with the same firmware and no sensor works as a wireless screen for the camera.
+- A second board with the same firmware and no sensor works as a wireless screen for the camera. On battery, each one waits in standby for the other and turns back on when it does.
 - The picture updates 16 times a second.
 - Both board revisions work: the original (SH8601 display) and V2 (CO5300 display). The sketch detects which one you have.
 
