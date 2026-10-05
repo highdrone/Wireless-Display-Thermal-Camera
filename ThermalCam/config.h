@@ -56,14 +56,23 @@
 // screen to keep using" countdown runs at the end. While you browse saved
 // pictures on it, IDLE_OFF_SECONDS applies instead.
 #define SCREEN_LINK_TIMEOUT_SECONDS 20
-// On battery, a wireless screen that times out goes into standby instead of
-// switching off: every SCREEN_STANDBY_CHECK_SECONDS it wakes for a moment to
-// ask whether the camera is on, and turns back on when it is. A tap, BOOT or
-// PWR (picked up at the next check) also turns it on. After
-// SCREEN_STANDBY_MINUTES without the camera it switches off completely.
-// 0 minutes = switch off straight away.
-#define SCREEN_STANDBY_CHECK_SECONDS 5
-#define SCREEN_STANDBY_MINUTES 30
+// The camera never auto-offs while a wireless screen shows its picture. Once
+// that screen goes away (switched off, asleep or out of range), the camera
+// turns off this many seconds later, after the usual countdown. Using the
+// camera in the meantime brings back the normal IDLE_OFF_SECONDS.
+// 0 = no camera standby: the normal auto-off applies.
+#define CAMERA_LINK_TIMEOUT_SECONDS 20
+// Standby, on battery. Instead of switching off, a wireless screen that lost
+// the camera waits for the camera to come back on, and a camera that lost its
+// wireless screen waits for a screen to come back on. Every
+// STANDBY_CHECK_SECONDS the board wakes for a moment to look for the other
+// one, and turns back on when it finds it switched on. A tap, BOOT or PWR
+// (picked up at the next check) also turns it on. After STANDBY_MINUTES it
+// switches off completely. 0 minutes = switch off straight away. A camera in
+// standby keeps its thermal sensor powered, so it uses more battery than a
+// screen does.
+#define STANDBY_CHECK_SECONDS 5
+#define STANDBY_MINUTES 30
 
 // ---- Auto-off --------------------------------------------------------------
 // Turn off after this many seconds without a button press or screen tap

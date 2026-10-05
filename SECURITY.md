@@ -27,7 +27,8 @@ commit.
   another transmitter can impersonate a screen or camera. The first-camera
   selection is not secure pairing. A wireless screen in battery standby wakes
   every few seconds to broadcast a probe, and turns on for any nearby device that
-  answers like a camera, which can also run down its battery. Set
+  answers like a camera; a camera in standby turns on for any nearby device that
+  says hello like a screen. Either can also run down the battery. Set
   `WIRELESS_SCREEN false` to disable this firmware's radio link; do not use the
   link for sensitive scenes.
 - There is no router password, cloud account, Internet upload, telemetry service
