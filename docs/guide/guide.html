@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Thermal Camera User Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+  @page { size: letter; margin: 0; }
+  :root {
+    --ink: #1b1530;
+    --ink-2: #4a4360;
+    --muted: #7a7390;
+    --paper: #fbf8f4;
+    --card: #ffffff;
+    --line: #e7e0d8;
+    --night: #0f0a1e;
+    --hot: #e8452c;
+    --warm: #fa6e00;
+    --cold: #2bb3d9;
+    --violet: #8c0096;
+    --ironbow: linear-gradient(90deg, #00000a 0%, #200064 12%, #8c0096 30%, #dc283c 50%, #fa6e00 66%, #ffc814 84%, #ffffeb 100%);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); }
+  body {
+    font-family: 'Inter', 'DejaVu Sans', sans-serif;
+    color: var(--ink);
+    font-size: 10.5pt;
+    line-height: 1.5;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 8.5in; height: 11in;
+    position: relative; overflow: hidden;
+    padding: 0.72in 0.75in 0.9in;
+    background: var(--paper);
+    page-break-after: always;
+    break-after: page;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+
+  /* ---------- page furniture ---------- */
+  .page::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px;
+    background: var(--ironbow);
+  }
+  .foot {
+    position: absolute; left: 0.75in; right: 0.75in; bottom: 0.45in;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: 0.08em;
+    color: var(--muted); text-transform: uppercase;
+    border-top: 1px solid var(--line); padding-top: 8px;
+  }
+  .foot b { color: var(--ink); font-weight: 700; }
+
+  .kicker {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 8.5pt;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--hot);
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  }
+  .kicker .num {
+    display: inline-block; padding: 2px 7px; border-radius: 5px;
+    background: var(--night); color: #ffc814; letter-spacing: 0.05em;
+  }
+  h1, h2, h3 { font-family: 'Space Grotesk', 'DejaVu Sans', sans-serif; margin: 0; color: var(--ink); }
+  h2 { font-size: 27pt; line-height: 1.08; font-weight: 700; letter-spacing: -0.01em; }
+  h3 { font-size: 13pt; font-weight: 700; margin: 0 0 6px; }
+  .lede { font-size: 11.5pt; color: var(--ink-2); margin: 10px 0 0; max-width: 6.3in; }
+  .rule { height: 3px; width: 72px; background: var(--ironbow); border-radius: 3px; margin: 14px 0 22px; }
+  p { margin: 0 0 8px; }
+  .small { font-size: 9pt; color: var(--ink-2); }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .card.dark { background: var(--night); border-color: var(--night); color: #ece7f5; }
+  .card.dark h3 { color: #fff; }
+
+  .tip {
+    position: relative; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 11px 14px 11px 18px; font-size: 9.5pt; color: var(--ink-2);
+  }
+  .tip::before {
+    content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 4px;
+    background: linear-gradient(180deg, #8c0096, #dc283c, #fa6e00, #ffc814);
+  }
+  .tip b { color: var(--ink); }
+
+  /* keycaps and gesture chips */
+  .key {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 8.5pt; letter-spacing: 0.06em;
+    color: #fff; background: var(--night); border-radius: 6px; padding: 3px 8px;
+    box-shadow: 0 2px 0 #3a3150; white-space: nowrap;
+  }
+  .key.pwr { background: var(--hot); box-shadow: 0 2px 0 #9e2a18; }
+  .key.touch { background: #fff; color: var(--ink); border: 1.5px solid var(--ink); box-shadow: 0 2px 0 var(--ink); }
+  .how { font-family: 'JetBrains Mono', monospace; font-size: 8pt; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+
+  table.ctl { width: 100%; border-collapse: separate; border-spacing: 0; }
+  table.ctl td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.ctl tr:last-child td { border-bottom: none; }
+  table.ctl td:first-child { width: 42%; white-space: nowrap; }
+  table.ctl td:last-child { color: var(--ink); }
+
+  .shot { width: 100%; display: block; border-radius: 12px; box-shadow: 0 10px 28px rgba(15,10,30,0.22); }
+  .frame {
+    background: var(--night); border-radius: 26px; padding: 14px;
+    box-shadow: 0 18px 40px rgba(15,10,30,0.35);
+  }
+  .frame img { display: block; width: 100%; border-radius: 14px; }
+  .caption { font-size: 8.5pt; color: var(--muted); margin-top: 8px; }
+
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; }
+  ol.steps li { counter-increment: s; position: relative; padding: 0 0 12px 40px; }
+  ol.steps li::before {
+    content: counter(s); position: absolute; left: 0; top: -1px;
+    width: 27px; height: 27px; border-radius: 50%;
+    background: var(--night); color: #ffc814;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 11pt;
+    display: flex; align-items: center; justify-content: center;
+  }
+  ol.steps li > b:first-child { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 11pt; }
+
+  ul.dots { margin: 0; padding: 0; list-style: none; }
+  ul.dots li { position: relative; padding-left: 16px; margin-bottom: 6px; }
+  ul.dots li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: var(--hot); }
+
+  .swatch { height: 26px; border-radius: 7px; border: 1px solid rgba(0,0,0,0.12); }
+  .pal { display: grid; grid-template-columns: 1.1in 1fr; align-items: center; gap: 12px; margin-bottom: 11px; }
+  .pal .name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 11pt; }
+  .pal .name span { display: block; font-family: 'Inter', sans-serif; font-weight: 400; font-size: 8.5pt; color: var(--muted); }
+
+  table.kv { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  table.kv th { text-align: left; font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 0 8px 6px 0; border-bottom: 2px solid var(--ink); }
+  table.kv td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.kv td.k { font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; font-weight: 700; white-space: nowrap; }
+  table.kv td.d { font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; color: var(--hot); white-space: nowrap; }
+
+  .trouble { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+  .trouble .t { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px; font-size: 9.2pt; color: var(--ink-2); }
+  .trouble .t b { display: block; color: var(--ink); font-family: 'Space Grotesk', sans-serif; font-size: 10.5pt; margin-bottom: 2px; }
+
+  .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 8pt;
+    background: #000; color: #fff; border: 1.5px solid #fff; outline: 1.5px solid #000; padding: 1px 6px; border-radius: 3px;
+  }
+
+  /* ---------- cover ---------- */
+  .cover { background: var(--night); color: #fff; padding: 0; }
+  .cover::before { display: none; }
+  .cover .glow {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 78% 30%, rgba(250,110,0,0.55) 0, rgba(220,40,60,0.35) 12%, rgba(140,0,150,0.25) 26%, rgba(32,0,100,0) 48%),
+      radial-gradient(circle at 15% 85%, rgba(43,179,217,0.18) 0, rgba(15,10,30,0) 40%);
+  }
+  .cover .top { position: absolute; left: 0.8in; right: 0.8in; top: 0.8in; display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; letter-spacing: 0.18em; text-transform: uppercase; color: #b9b0cf; }
+  .cover h1 {
+    position: absolute; left: 0.8in; top: 1.55in; color: #fff;
+    font-size: 64pt; line-height: 0.92; font-weight: 700; letter-spacing: -0.03em;
+  }
+  .cover h1 .grad { background: linear-gradient(90deg, #ffc814, #fa6e00 45%, #dc283c 80%, #8c0096); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .cover .sub { position: absolute; left: 0.8in; top: 3.75in; width: 4.6in; font-size: 13pt; line-height: 1.45; color: #d9d2ea; }
+  .cover .device {
+    position: absolute; left: 1.55in; top: 4.9in; width: 5.4in;
+    background: #050309; border-radius: 34px; padding: 18px;
+    box-shadow: 0 0 0 1.5px #2b2342, 0 30px 70px rgba(0,0,0,0.6), 0 0 90px rgba(250,110,0,0.25);
+  }
+  .cover .device img { display: block; width: 100%; border-radius: 20px; }
+  .cover .band { position: absolute; left: 0; right: 0; bottom: 1.15in; height: 10px; background: var(--ironbow); }
+  .cover .bottom { position: absolute; left: 0.8in; right: 0.8in; bottom: 0.55in; display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: 8pt; letter-spacing: 0.12em; text-transform: uppercase; color: #9d94b5; }
+  .cover .temps { position: absolute; left: 0.8in; top: 4.45in; display: flex; gap: 14px; font-family: 'JetBrains Mono', monospace; font-size: 9pt; }
+  .cover .temps span { padding: 3px 9px; border-radius: 20px; border: 1px solid #3b3256; color: #d9d2ea; }
+
+  svg text { font-family: 'Inter', sans-serif; }
+  svg .lt { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; fill: #1b1530; }
+  svg .ld { font-size: 11.5px; fill: #6b6480; }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<section class="page cover">
+  <div class="glow"></div>
+  <div class="top"><span>ESP32-S3 · AMOLED · MLX90640</span><span>User guide</span></div>
+  <h1>Thermal<br><span style="color:#ffc814">C</span><span style="color:#ffa20c">a</span><span style="color:#fa6e00">m</span><span style="color:#ef4a2c">e</span><span style="color:#dc283c">r</span><span style="color:#b8169a">a</span></h1>
+  <div class="sub">See heat in real time. Aim, read the temperature, save a picture, and watch it on a wireless second screen.</div>
+  <div class="temps"><span>16 frames / s</span><span>32 × 24 sensor</span><span>°C / °F</span><span>Wireless screen</span></div>
+  <div class="device"><img src="../../preview.png" alt=""></div>
+  <div class="band"></div>
+  <div class="bottom"><span>Waveshare ESP32-S3-Touch-AMOLED-1.8</span><span>Firmware with screen &amp; camera standby</span></div>
+</section>
+
+<!-- ============================ QUICK START + SCREEN ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">01</span>Quick start</div>
+  <h2>Point, read, save.</h2>
+  <div class="rule"></div>
+
+  <div class="grid3" style="margin-bottom: 26px;">
+    <div class="card"><h3>1 · Turn it on</h3><p class="small">Short-press <span class="key pwr">PWR</span>. The live picture appears after a moment.</p></div>
+    <div class="card"><h3>2 · Aim</h3><p class="small">Point the sensor at what you want to measure and put it under the <b>crosshair</b>.</p></div>
+    <div class="card"><h3>3 · Save</h3><p class="small">Short-press <span class="key pwr">PWR</span> again to save a picture to the microSD card.</p></div>
+  </div>
+
+  <div class="kicker" style="margin-top: 4px;">Reading the screen</div>
+  <svg viewBox="0 0 800 450" width="100%" style="display:block; margin-top: 4px;">
+    <defs>
+      <clipPath id="r"><rect x="180" y="30" width="448" height="368" rx="10"/></clipPath>
+    </defs>
+    <image href="../../preview.png" x="180" y="30" width="448" height="368" clip-path="url(#r)"/>
+    <g fill="none" stroke-linecap="round">
+      <!-- halos -->
+      <g stroke="#ffffff" stroke-width="4" opacity="0.9">
+        <path d="M168 54 H205"/><path d="M168 198 H390"/><path d="M168 289 H277"/><path d="M168 381 H202"/>
+        <path d="M603 51 H640"/><path d="M602 317 H640"/><path d="M603 381 H640"/><path d="M405 390 V420"/>
+      </g>
+      <g stroke="#e8452c" stroke-width="1.6">
+        <path d="M168 54 H205"/><path d="M168 198 H390"/><path d="M168 289 H277"/><path d="M168 381 H202"/>
+        <path d="M603 51 H640"/><path d="M602 317 H640"/><path d="M603 381 H640"/><path d="M405 390 V420"/>
+      </g>
+    </g>
+    <g fill="#e8452c" stroke="#fff" stroke-width="2">
+      <circle cx="205" cy="54" r="4.5"/><circle cx="390" cy="198" r="4.5"/><circle cx="277" cy="289" r="4.5"/><circle cx="202" cy="381" r="4.5"/>
+      <circle cx="603" cy="51" r="4.5"/><circle cx="602" cy="317" r="4.5"/><circle cx="603" cy="381" r="4.5"/><circle cx="405" cy="390" r="4.5"/>
+    </g>
+    <g text-anchor="end">
+      <text x="160" y="51" class="lt">Center reading</text><text x="160" y="66" class="ld">at the crosshair</text>
+      <text x="160" y="195" class="lt">Crosshair</text><text x="160" y="210" class="ld">aim it at your target</text>
+      <text x="160" y="286" class="lt">Hottest spot</text><text x="160" y="301" class="ld">red ring</text>
+      <text x="160" y="378" class="lt">Coldest reading</text><text x="160" y="393" class="ld">left end, blue</text>
+    </g>
+    <g text-anchor="start">
+      <text x="648" y="48" class="lt">Battery</text><text x="648" y="63" class="ld">bolt = charging</text><text x="648" y="77" class="ld">“USB” = no battery</text>
+      <text x="648" y="314" class="lt">Coldest spot</text><text x="648" y="329" class="ld">blue ring</text>
+      <text x="648" y="378" class="lt">Hottest reading</text><text x="648" y="393" class="ld">right end, red</text>
+    </g>
+    <text x="405" y="438" text-anchor="middle" class="lt">Color scale <tspan class="ld" style="font-family:Inter; font-weight:400">· stretches to fit the scene</tspan></text>
+  </svg>
+
+  <div class="grid2" style="margin-top: 14px;">
+    <div class="tip"><b>Rings follow the extremes.</b> The red and blue rings sit on the hottest and coldest patch in view. They only move when another spot is clearly hotter or colder, so they don't jitter.</div>
+    <div class="tip"><b>Smoothed, not slow.</b> The picture refreshes 16 times a second and is gently smoothed, so readings stay steady while you aim. It still follows a moving object within about 0.1 s.</div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>02</span></div>
+</section>
+
+<!-- ============================ CONTROLS ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">02</span>Controls</div>
+  <h2>Two buttons and a touchscreen.</h2>
+  <p class="lede"><span class="key">BOOT</span> changes how the picture looks, <span class="key pwr">PWR</span> turns the camera on and saves pictures, and a sideways swipe switches between live view and saved pictures.</p>
+  <div class="rule"></div>
+
+  <div class="card" style="margin-bottom: 12px;">
+    <h3>Live camera</h3>
+    <table class="ctl">
+      <tr><td><span class="key">BOOT</span><span class="how">short press</span></td><td>Next color palette: Ironbow → Rainbow → Hot → White hot → Black hot</td></tr>
+      <tr><td><span class="key">BOOT</span><span class="how">hold ~1 s</span></td><td>Switch between °C and °F</td></tr>
+      <tr><td><span class="key pwr">PWR</span><span class="how">short press</span></td><td>Save a picture to the microSD card. When the camera is off, this turns it on.</td></tr>
+      <tr><td><span class="key touch">SWIPE →</span><span class="how">left to right</span></td><td>Open the picture viewer (newest picture first)</td></tr>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 12px;">
+    <h3>Picture viewer</h3>
+    <table class="ctl">
+      <tr><td><span class="key touch">TAP</span><span class="how">left half</span></td><td>Previous (older) picture</td></tr>
+      <tr><td><span class="key touch">TAP</span><span class="how">right half</span></td><td>Next (newer) picture</td></tr>
+      <tr><td><span class="key">BOOT</span><span class="how">short press</span></td><td>Previous (older) picture</td></tr>
+      <tr><td><span class="key touch">← SWIPE</span> <span class="how">or</span> <span class="key pwr">PWR</span></td><td>Back to the live camera</td></tr>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <div class="card dark">
+      <h3>Anywhere</h3>
+      <ul class="dots" style="font-size: 9.5pt;">
+        <li><b>Long-press PWR</b> to switch the board off. The power chip does this itself.</li>
+        <li><b>Tap the screen</b> to keep the camera on during the auto-off countdown, or to wake a dark screen.</li>
+        <li>A wake-up touch or press <b>does nothing else</b>: no palette change, no picture.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Remembered settings</h3>
+      <p class="small">Your palette and °C/°F choice are kept after power-off.</p>
+      <h3 style="margin-top: 12px;">Swipe tips</h3>
+      <p class="small" style="margin: 0;">Swipe across at least a sixth of the screen, mostly sideways. Short, straight taps count as taps.</p>
+    </div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>03</span></div>
+</section>
+
+<!-- ============================ PALETTES + SAVING ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">03</span>Palettes &amp; units</div>
+  <h2>Choose how heat looks.</h2>
+  <p class="lede">Every palette maps the coldest thing in view to the left end of the bar and the hottest to the right. Press <span class="key">BOOT</span> to step through them.</p>
+  <div class="rule"></div>
+
+  <div class="pal"><div class="name">Ironbow<span>default · all-round</span></div><div class="swatch" style="background: linear-gradient(90deg, rgb(0,0,10) 0%, rgb(32,0,100) 12%, rgb(140,0,150) 30%, rgb(220,40,60) 50%, rgb(250,110,0) 66%, rgb(255,200,20) 84%, rgb(255,255,235) 100%);"></div></div>
+  <div class="pal"><div class="name">Rainbow<span>most contrast</span></div><div class="swatch" style="background: linear-gradient(90deg, rgb(0,0,120) 0%, rgb(0,0,255) 15%, rgb(0,220,255) 35%, rgb(0,220,0) 50%, rgb(255,240,0) 68%, rgb(255,0,0) 86%, rgb(255,255,255) 100%);"></div></div>
+  <div class="pal"><div class="name">Hot<span>warm tones</span></div><div class="swatch" style="background: linear-gradient(90deg, rgb(0,0,0) 0%, rgb(200,0,0) 40%, rgb(255,200,0) 75%, rgb(255,255,255) 100%);"></div></div>
+  <div class="pal"><div class="name">White hot<span>classic grayscale</span></div><div class="swatch" style="background: linear-gradient(90deg, #000, #fff);"></div></div>
+  <div class="pal"><div class="name">Black hot<span>inverted grayscale</span></div><div class="swatch" style="background: linear-gradient(90deg, #fff, #000);"></div></div>
+
+  <div class="tip" style="margin: 6px 0 28px;"><b>Hold <span class="key">BOOT</span> for about a second</b> to switch between °C and °F. The color scale always spans at least 3 °C, so sensor noise on a plain wall doesn't look like a rainbow.</div>
+
+  <div class="kicker"><span class="num">04</span>Saving pictures</div>
+  <div class="grid2" style="align-items: start;">
+    <div>
+      <h3 style="font-size: 17pt; margin-bottom: 8px;">One press, two files.</h3>
+      <p>Put a <b>FAT32 microSD card</b> in the slot (cards of 32 GB or less come that way). Each short press of <span class="key pwr">PWR</span> saves into a <span class="mono">thermal</span> folder:</p>
+      <ul class="dots">
+        <li><span class="mono"><b>IMG_0001.bmp</b></span>: the screen exactly as shown, with readings and color scale (448 × 368).</li>
+        <li><span class="mono"><b>IMG_0001.csv</b></span>: all 32 × 24 temperatures in °C, laid out like the picture. Opens in Excel or Numbers.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>What you'll see</h3>
+      <p class="small">Top right briefly shows <span class="mono"><b>Saved IMG_0001</b></span>. With no card it says <span class="mono"><b>No SD card</b></span>.</p>
+      <p class="small" style="margin: 0;">Numbering carries on from the last picture, even after power-off.</p>
+    </div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>04</span></div>
+</section>
+
+<!-- ============================ VIEWER ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">05</span>Picture viewer</div>
+  <h2>Look back at what you saved.</h2>
+  <p class="lede">Swipe left to right on the live picture. The viewer opens on your newest picture and shows exactly what was on screen when you saved it.</p>
+  <div class="rule"></div>
+
+  <div class="frame" style="width: 5.2in; margin: 4px auto 0;"><img src="../picture-viewer.png" alt="Picture viewer"></div>
+  <p class="caption" style="text-align: center;">The label at the top right shows the file name and its position: picture 3 of 3. Simulated screenshot.</p>
+
+  <div class="grid3" style="margin-top: 22px;">
+    <div class="card"><h3>Older</h3><p class="small" style="margin:0;">Tap the <b>left half</b> of the screen, or press <span class="key">BOOT</span>.</p></div>
+    <div class="card"><h3>Newer</h3><p class="small" style="margin:0;">Tap the <b>right half</b> of the screen.</p></div>
+    <div class="card"><h3>Back to live</h3><p class="small" style="margin:0;">Swipe <b>right to left</b>, or press <span class="key pwr">PWR</span>.</p></div>
+  </div>
+  <div class="tip" style="margin-top: 16px;"><b>Pictures live on the card in each board.</b> On a wireless screen, the viewer browses the screen's own microSD card, not the camera's.</div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>05</span></div>
+</section>
+
+<!-- ============================ WIRELESS SCREEN ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">06</span>Wireless screen</div>
+  <h2>A second screen, no router needed.</h2>
+  <p class="lede">A second ESP32-S3-Touch-AMOLED-1.8 with <b>no thermal sensor</b> becomes a live wireless screen for the camera. The boards talk directly over ESP-NOW radio; expect about a room of range.</p>
+  <div class="rule"></div>
+
+  <img class="shot" src="../wireless-screen.png" alt="Camera and wireless screen">
+  <p class="caption">Left: the camera, with the <span class="badge">LIVE</span> badge showing a screen is watching. Right: the wireless screen, showing the same picture, palette, markers and readings. Simulated.</p>
+
+  <div class="grid2" style="margin-top: 18px; align-items: start;">
+    <div>
+      <h3>Set it up</h3>
+      <ol class="steps">
+        <li><b>Flash the same firmware</b>Use the same file on both boards. Nothing else to configure.</li>
+        <li><b>Leave the sensor off the second board</b>At startup it finds no sensor and becomes a screen.</li>
+        <li><b>Turn both on</b>The screen shows <i>Waiting for the thermal camera</i> until the camera's picture arrives.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Good to know</h3>
+      <ul class="dots" style="font-size: 9.3pt;">
+        <li>Palette and °C/°F follow the camera. Change them on the camera.</li>
+        <li><span class="key pwr">PWR</span> on the screen saves what it shows to the <b>screen's own</b> card.</li>
+        <li>The camera only transmits while a screen is listening, and won't auto-off while one is.</li>
+        <li>With several cameras nearby, the screen stays with the first one it hears.</li>
+        <li>Both boards must use the same radio channel (channel 1 by default).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>06</span></div>
+</section>
+
+<!-- ============================ STANDBY ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">07</span>Wireless screen · standby</div>
+  <h2>Turns on when the camera does.</h2>
+  <p class="lede">When the camera switches off or goes out of range, the wireless screen waits a little, then goes dark. On battery it keeps listening in a low-power standby and comes back on by itself when the camera returns.</p>
+  <div class="rule"></div>
+
+  <svg viewBox="0 0 760 250" width="100%" style="display:block;">
+    <defs>
+      <linearGradient id="live" x1="0" x2="1"><stop offset="0" stop-color="#8c0096"/><stop offset="0.5" stop-color="#dc283c"/><stop offset="1" stop-color="#fa6e00"/></linearGradient>
+    </defs>
+    <!-- segments -->
+    <path d="M10 118 a8 8 0 0 1 8 -8 H150 V144 H18 a8 8 0 0 1 -8 -8 Z" fill="url(#live)"/>
+    <rect x="150" y="110" width="170" height="34" fill="#d9d2e6"/>
+    <rect x="235" y="110" width="85" height="34" fill="#f2b8a8"/>
+    <rect x="320" y="110" width="300" height="34" fill="#0f0a1e"/>
+    <path d="M620 110 H742 a8 8 0 0 1 8 8 V136 a8 8 0 0 1 -8 8 H620 Z" fill="url(#live)"/>
+    <!-- standby pulses -->
+    <g fill="#ffc814">
+      <circle cx="360" cy="127" r="4"/><circle cx="410" cy="127" r="4"/><circle cx="460" cy="127" r="4"/><circle cx="510" cy="127" r="4"/><circle cx="560" cy="127" r="4"/>
+    </g>
+    <!-- labels inside -->
+    <text x="80" y="132" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-weight="700" font-size="14">Live picture</text>
+    <text x="685" y="132" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-weight="700" font-size="14">Live again</text>
+    <!-- event markers -->
+    <g stroke="#1b1530" stroke-width="1.5">
+      <path d="M150 100 V154"/><path d="M235 100 V154" stroke-dasharray="3 3"/><path d="M320 100 V154"/><path d="M620 100 V154"/>
+    </g>
+    <g font-family="Space Grotesk" font-weight="700" font-size="13" fill="#1b1530">
+      <text x="150" y="70" text-anchor="middle">Camera</text><text x="150" y="86" text-anchor="middle">turns off</text>
+      <text x="235" y="86" text-anchor="middle" font-size="12" fill="#e8452c">10 s</text>
+      <text x="320" y="70" text-anchor="middle">20 s</text><text x="320" y="86" text-anchor="middle">screen goes dark</text>
+      <text x="620" y="70" text-anchor="middle">Camera</text><text x="620" y="86" text-anchor="middle">turns on</text>
+    </g>
+    <g font-size="11.5" fill="#4a4360" font-family="Inter">
+      <text x="235" y="172" text-anchor="middle">“Lost the camera's signal”</text>
+      <text x="235" y="187" text-anchor="middle">countdown from 10 s · tap to keep waiting</text>
+      <text x="470" y="172" text-anchor="middle">Standby · checks for the camera every 5 s</text>
+      <text x="470" y="187" text-anchor="middle">(yellow dots)</text>
+      <text x="660" y="172" text-anchor="middle">back on within a few</text>
+      <text x="660" y="187" text-anchor="middle">seconds, by itself</text>
+    </g>
+    <!-- 30 min note -->
+    <path d="M320 205 H620" stroke="#7a7390" stroke-width="1.2" marker-end="none"/>
+    <path d="M320 199 V211 M620 199 V211" stroke="#7a7390" stroke-width="1.2"/>
+    <text x="470" y="232" text-anchor="middle" font-size="11.5" fill="#7a7390" font-family="Inter">no camera for 30 minutes → switches off completely (then press PWR)</text>
+  </svg>
+
+  <div class="grid2" style="margin-top: 14px;">
+    <div class="card">
+      <h3>On battery</h3>
+      <ul class="dots" style="font-size: 9.5pt;">
+        <li>Goes into <b>standby</b> with the screen dark, waking briefly every 5 s to ask “is the camera on?”.</li>
+        <li><b>Tap the screen</b> or press <span class="key">BOOT</span> to turn it on straight away.</li>
+        <li><span class="key pwr">PWR</span> works too, but is noticed at the next 5-second check.</li>
+        <li>After <b>30 minutes</b> without the camera it powers off completely. Press <span class="key pwr">PWR</span> to turn it on.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>On USB power</h3>
+      <ul class="dots" style="font-size: 9.5pt;">
+        <li>Only the display goes dark; the board keeps listening.</li>
+        <li>It lights up again <b>the moment</b> the camera's picture returns.</li>
+        <li>Tap the screen to wake it any time.</li>
+      </ul>
+      <h3 style="margin-top: 10px;">While browsing pictures</h3>
+      <p class="small" style="margin:0;">On the screen's picture viewer, the normal 60-second auto-off applies instead.</p>
+    </div>
+  </div>
+  <div class="tip" style="margin-top: 14px;"><b>The camera's battery isn't affected.</b> A sleeping screen's quick check gets one frame back, but doesn't count as someone watching, so the camera's own auto-off still works.</div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>07</span></div>
+</section>
+
+<!-- ============================ CAMERA STANDBY ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">08</span>Camera · standby</div>
+  <h2>Sleeps when the screen leaves.</h2>
+  <p class="lede">While a wireless screen shows its picture, the camera <b>never turns itself off</b>. When that screen is switched off or goes out of range, the camera waits about 20 seconds, then goes dark, and turns back on by itself when you switch the screen on again.</p>
+  <div class="rule"></div>
+
+  <svg viewBox="0 0 760 250" width="100%" style="display:block;">
+    <defs>
+      <linearGradient id="live2" x1="0" x2="1"><stop offset="0" stop-color="#8c0096"/><stop offset="0.5" stop-color="#dc283c"/><stop offset="1" stop-color="#fa6e00"/></linearGradient>
+    </defs>
+    <path d="M10 118 a8 8 0 0 1 8 -8 H190 V144 H18 a8 8 0 0 1 -8 -8 Z" fill="url(#live2)"/>
+    <rect x="190" y="110" width="115" height="34" fill="#d9d2e6"/>
+    <rect x="305" y="110" width="85" height="34" fill="#f2b8a8"/>
+    <rect x="390" y="110" width="230" height="34" fill="#0f0a1e"/>
+    <path d="M620 110 H742 a8 8 0 0 1 8 8 V136 a8 8 0 0 1 -8 8 H620 Z" fill="url(#live2)"/>
+    <g fill="#ffc814">
+      <circle cx="425" cy="127" r="4"/><circle cx="470" cy="127" r="4"/><circle cx="515" cy="127" r="4"/><circle cx="560" cy="127" r="4"/><circle cx="605" cy="127" r="4"/>
+    </g>
+    <text x="100" y="132" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-weight="700" font-size="14">Screen watching · LIVE</text>
+    <text x="685" y="132" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-weight="700" font-size="14">Live again</text>
+    <g stroke="#1b1530" stroke-width="1.5">
+      <path d="M190 100 V154"/><path d="M305 100 V154" stroke-dasharray="3 3"/><path d="M390 100 V154"/><path d="M620 100 V154"/>
+    </g>
+    <g font-family="Space Grotesk" font-weight="700" font-size="13" fill="#1b1530">
+      <text x="190" y="70" text-anchor="middle">Screen</text><text x="190" y="86" text-anchor="middle">turns off</text>
+      <text x="305" y="86" text-anchor="middle" font-size="12" fill="#e8452c">~13 s</text>
+      <text x="390" y="70" text-anchor="middle">~20 s</text><text x="390" y="86" text-anchor="middle">camera goes dark</text>
+      <text x="620" y="70" text-anchor="middle">Screen</text><text x="620" y="86" text-anchor="middle">turns on</text>
+    </g>
+    <g font-size="11.5" fill="#4a4360" font-family="Inter">
+      <text x="100" y="172" text-anchor="middle">no countdown, no auto-off</text>
+      <text x="300" y="172" text-anchor="middle">“Standby in 10…” countdown</text>
+      <text x="300" y="187" text-anchor="middle">tap to keep using</text>
+      <text x="505" y="172" text-anchor="middle">Standby · listens for a switched-on</text>
+      <text x="505" y="187" text-anchor="middle">screen every 5 s (yellow dots)</text>
+      <text x="685" y="172" text-anchor="middle">streaming again within</text>
+      <text x="685" y="187" text-anchor="middle">a few seconds, by itself</text>
+    </g>
+    <path d="M390 205 H620" stroke="#7a7390" stroke-width="1.2"/>
+    <path d="M390 199 V211 M620 199 V211" stroke="#7a7390" stroke-width="1.2"/>
+    <text x="505" y="232" text-anchor="middle" font-size="11.5" fill="#7a7390" font-family="Inter">no screen for 30 minutes → switches off completely (then press PWR)</text>
+  </svg>
+
+  <div class="grid3" style="margin-top: 14px;">
+    <div class="card">
+      <h3>On battery</h3>
+      <ul class="dots" style="font-size: 9.2pt;">
+        <li>Goes into <b>standby</b>, waking briefly every 5 s to listen for the screen.</li>
+        <li><b>Tap</b> or <span class="key">BOOT</span>: on straight away. <span class="key pwr">PWR</span>: at the next check.</li>
+        <li>After <b>30 minutes</b> it switches off completely.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>On USB power</h3>
+      <ul class="dots" style="font-size: 9.2pt;">
+        <li>Only the camera's display goes dark; it keeps running.</li>
+        <li>The display lights up again <b>the moment</b> a screen connects.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Using it on its own</h3>
+      <ul class="dots" style="font-size: 9.2pt;">
+        <li>Touch it or press a button after the screen leaves, and the normal <b>60-second</b> auto-off applies.</li>
+        <li>When that runs out, it still waits in standby for the screen.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="grid2" style="margin-top: 14px;">
+    <div class="tip"><b>Two boards asleep? Wake either one.</b> A sleeping camera only wakes for a screen that is switched on, so two boards in standby never keep waking each other. Tap or press a button on either board, and the other follows within a few seconds.</div>
+    <div class="tip"><b>Standby uses some battery.</b> The thermal sensor stays powered while the camera waits, so standby drains the battery faster than switching off. That's why it ends after 30 minutes.</div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>08</span></div>
+</section>
+
+<!-- ============================ POWER ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">09</span>Power &amp; auto-off</div>
+  <h2>Saves battery when you forget.</h2>
+  <p class="lede">The camera counts as idle when nobody presses a button, touches the screen, or plugs in or unplugs USB. After a minute of that, it turns off.</p>
+  <div class="rule"></div>
+
+  <svg viewBox="0 0 760 130" width="100%" style="display:block;">
+    <defs><linearGradient id="idle" x1="0" x2="1"><stop offset="0" stop-color="#e7e0d8"/><stop offset="1" stop-color="#d9d2e6"/></linearGradient></defs>
+    <rect x="10" y="50" width="600" height="30" rx="8" fill="url(#idle)"/>
+    <rect x="510" y="50" width="100" height="30" fill="#f2b8a8"/>
+    <rect x="610" y="50" width="140" height="30" rx="8" fill="#0f0a1e"/>
+    <g font-family="Space Grotesk" font-weight="700" font-size="13" fill="#1b1530">
+      <text x="10" y="38">0 s · last touch or press</text>
+      <text x="510" y="38" text-anchor="middle">50 s</text>
+      <text x="610" y="38" text-anchor="middle">60 s</text>
+    </g>
+    <text x="260" y="70" text-anchor="middle" font-size="12" fill="#4a4360" font-family="Inter">in use</text>
+    <text x="560" y="70" text-anchor="middle" font-size="11" fill="#9e2a18" font-family="Inter" font-weight="600">countdown</text>
+    <text x="680" y="70" text-anchor="middle" font-size="12" fill="#fff" font-family="Space Grotesk" font-weight="700">off</text>
+    <text x="560" y="104" text-anchor="middle" font-size="11.5" fill="#4a4360" font-family="Inter">“Tap screen to keep using”</text>
+  </svg>
+
+  <div class="grid2" style="margin-top: 8px;">
+    <div class="card"><h3>On battery</h3><p class="small" style="margin:0;">The camera <b>powers off completely</b>. Press <span class="key pwr">PWR</span> to turn it back on. If a wireless screen was connected, it goes into <b>standby</b> instead and turns on with the screen.</p></div>
+    <div class="card"><h3>On USB power</h3><p class="small" style="margin:0;">Only the <b>screen</b> turns off. Tap it, or press any button, to wake it. The waking press doesn't change the palette or save a picture.</p></div>
+  </div>
+
+  <div class="kicker" style="margin-top: 28px;">Battery indicator</div>
+  <div class="grid3">
+    <div class="card"><h3>72%</h3><p class="small" style="margin:0;">Battery level, at the top right of the picture.</p></div>
+    <div class="card"><h3>Lightning bolt</h3><p class="small" style="margin:0;">The battery is charging over USB-C.</p></div>
+    <div class="card"><h3>“USB”</h3><p class="small" style="margin:0;">Running from USB with no battery connected.</p></div>
+  </div>
+
+  <div class="tip" style="margin-top: 16px;"><b>Someone watching remotely keeps it on.</b> While a wireless screen is showing the camera's picture, the camera doesn't auto-off.</div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>09</span></div>
+</section>
+
+<!-- ============================ ACCURACY + SAFETY ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">10</span>Getting good readings</div>
+  <h2>What the numbers mean.</h2>
+  <p class="lede">A thermal camera reads the heat a surface gives off. Most surfaces behave the same way, but some don't, and it helps to know which.</p>
+  <div class="rule"></div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Accuracy</h3>
+      <p class="small">About <b>±1–2 °C</b> absolute. Readings settle after a few minutes of warm-up.</p>
+      <p class="small" style="margin:0;">Readings assume an <b>emissivity of 0.95</b>, which is right for skin, wood, paint, plastic and food.</p>
+    </div>
+    <div class="card">
+      <h3>Shiny metal reads low</h3>
+      <p class="small">Polished metal reflects heat instead of giving it off, so it can read close to room temperature even when hot. This is normal for every thermal camera.</p>
+      <p class="small" style="margin:0;"><b>Fix:</b> put a piece of matte tape on the metal and measure the tape.</p>
+    </div>
+    <div class="card">
+      <h3>Spot size</h3>
+      <p class="small" style="margin:0;">The sensor has 32 × 24 pixels. Small or distant objects cover only part of a pixel, so they read closer to the background temperature than they really are. Get closer for small targets.</p>
+    </div>
+    <div class="card">
+      <h3>Smoothing</h3>
+      <p class="small" style="margin:0;">Readings ease toward new values so they stay steady. Give the number a moment to settle after you move to a new target.</p>
+    </div>
+  </div>
+
+  <div class="kicker" style="margin-top: 30px;"><span class="num">11</span>Safety &amp; privacy</div>
+  <div class="card dark" style="padding: 18px 20px;">
+    <ul class="dots" style="font-size: 9.6pt; margin: 0;">
+      <li>This is a <b>hobby thermal imager</b>, not a medical instrument, fire alarm or electrical-safety tester. Never use its readings as the only basis for a health or safety decision.</li>
+      <li>The wireless link is <b>unencrypted and unauthenticated</b>. Anyone nearby with the right equipment can receive the picture, or pretend to be a camera or a screen. Don't use it for sensitive scenes.</li>
+      <li>Saved pictures on the microSD card are <b>not encrypted</b>. Wipe the card before you lend or give the device away.</li>
+      <li>Wire the sensor at <b>3.3 V</b> with power disconnected, and keep its wires short.</li>
+    </ul>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>10</span></div>
+</section>
+
+<!-- ============================ TROUBLESHOOTING ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">12</span>Troubleshooting</div>
+  <h2>If something's not right.</h2>
+  <div class="rule"></div>
+
+  <div class="trouble">
+    <div class="t"><b>Black screen after flashing</b>Unplug the board and plug it back in <i>without</i> holding BOOT. It won't run new firmware while it's still in flashing mode.</div>
+    <div class="t"><b>“No SD card” when saving</b>Use a microSD card formatted FAT32 (32 GB or less). Push it in until it clicks.</div>
+    <div class="t"><b>“Sensor not found”</b>The screen lists the I2C addresses it can see. Other devices but no <span class="mono">0x33</span>: check the sensor's VCC/GND and that SDA/SCL aren't swapped. <span class="mono">none</span>: the wires aren't where the firmware expects them.</div>
+    <div class="t"><b>The camera says “Wireless screen”</b>It didn't find its sensor at startup, so it became a screen. Check the sensor wires as above.</div>
+    <div class="t"><b>Wireless screen keeps waiting</b>Turn the camera on. Keep both boards in the same room at first, and make sure both run the same firmware and radio channel.</div>
+    <div class="t"><b>A board in standby won't wake</b>After 30 minutes in standby a board switches off completely: press PWR. If both boards are asleep, wake either one and the other follows.</div>
+    <div class="t"><b>“Sensor stopped” after working</b>A loose wire, or a long or noisy cable. Keep the sensor wires short.</div>
+    <div class="t"><b>Checkerboard pattern on moving objects</b>The shared I2C bus isn't keeping up. Lower <span class="mono">SENSOR_REFRESH_HZ</span> to 8 in <span class="mono">config.h</span> and rebuild.</div>
+    <div class="t"><b>Picture lags when you pan, or is jumpy</b>Lower <span class="mono">SMOOTHING</span> for a faster picture; raise it for a steadier one.</div>
+    <div class="t"><b>Swipes don't register</b>Swipe across at least a sixth of the screen, mostly sideways.</div>
+    <div class="t"><b>Text clipped in the corners</b>Raise <span class="mono">SCREEN_CORNER_RADIUS</span> in <span class="mono">config.h</span>.</div>
+    <div class="t"><b>Picture moves the wrong way</b>Mount the sensor pointing away from you. If it still pans backwards, change <span class="mono">MIRROR_IMAGE</span>; if upside down, set <span class="mono">SCREEN_ROTATION</span> to 3.</div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>11</span></div>
+</section>
+
+<!-- ============================ FIRMWARE + SPECS ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">13</span>Updating the firmware</div>
+  <h2>Flash from your browser.</h2>
+  <p class="lede">No software to install. Use the ready-made firmware file from the project's <span class="mono">firmware</span> folder, and flash the <b>same file</b> to the camera and to any wireless screen.</p>
+  <div class="rule"></div>
+
+  <div class="grid2" style="align-items: start;">
+    <ol class="steps">
+      <li><b>Open esptool-js</b>Go to <span class="mono">espressif.github.io/esptool-js</span> in Chrome or Edge.</li>
+      <li><b>Connect</b>Plug in the board and click <b>Connect</b>. If no port appears, unplug, then hold <span class="key">BOOT</span> while plugging it back in.</li>
+      <li><b>Program at 0x0</b>Set the flash address to <span class="mono"><b>0x0</b></span>, choose the <span class="mono">.bin</span> file, and click <b>Program</b>.</li>
+      <li><b>Restart</b>Unplug and replug the board, or press its power button.</li>
+    </ol>
+    <div class="tip"><b>Flashing the full image resets stored settings.</b> Your palette and °C/°F choice go back to the defaults. Pictures on the microSD card are not touched.</div>
+  </div>
+
+  <div class="grid2" style="margin-top: 10px; align-items: start;">
+    <div>
+      <div class="kicker">Specifications</div>
+      <table class="kv">
+        <tr><th>Item</th><th>Value</th></tr>
+        <tr><td>Sensor</td><td>MLX90640, 32 × 24 pixels, 55° or 110° view</td></tr>
+        <tr><td>Display</td><td>1.8″ AMOLED, 448 × 336 picture, landscape</td></tr>
+        <tr><td>Refresh</td><td>16 frames per second</td></tr>
+        <tr><td>Accuracy</td><td>about ±1–2 °C</td></tr>
+        <tr><td>Storage</td><td>microSD (FAT32): BMP + CSV</td></tr>
+        <tr><td>Wireless</td><td>ESP-NOW, about a room of range</td></tr>
+        <tr><td>Boards</td><td>Waveshare ESP32-S3-Touch-AMOLED-1.8, original and V2</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="kicker">Defaults you can change</div>
+      <table class="kv">
+        <tr><th>Setting in config.h</th><th>Default</th></tr>
+        <tr><td class="k">IDLE_OFF_SECONDS</td><td class="d">60</td></tr>
+        <tr><td class="k">SCREEN_LINK_TIMEOUT_SECONDS</td><td class="d">20</td></tr>
+        <tr><td class="k">CAMERA_LINK_TIMEOUT_SECONDS</td><td class="d">20</td></tr>
+        <tr><td class="k">STANDBY_CHECK_SECONDS</td><td class="d">5</td></tr>
+        <tr><td class="k">STANDBY_MINUTES</td><td class="d">30</td></tr>
+        <tr><td class="k">WIRELESS_SCREEN</td><td class="d">true</td></tr>
+        <tr><td class="k">START_IN_FAHRENHEIT</td><td class="d">false</td></tr>
+        <tr><td class="k">SCREEN_BRIGHTNESS</td><td class="d">200</td></tr>
+      </table>
+      <p class="small" style="margin-top: 8px;">Changing these needs an Arduino build; see the project README.</p>
+    </div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>12</span></div>
+</section>
+
+</body>
+</html>

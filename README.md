@@ -237,7 +237,9 @@ sanitizers. Tests exercise malformed BMP headers, palette endpoints, privacy
 regressions, preserved defaults, ignore rules, source/notice hashes, current manifest checksum, merged components,
 image integrity, partition layout and blank NVS.
 CI runs these offline checks only; it does not build the ESP32 firmware or test
-a physical board. The worktree privacy checker does not replace a full Git
+a physical board. For behaviour (markers, wireless link, standby), run the host
+simulation tests in [tools/hostsim](tools/hostsim/README.md). Release image helpers are
+in `tools/release/`, and the user guide's source is in [docs/guide](docs/guide/README.md). The worktree privacy checker does not replace a full Git
 history, compressed archive, binary or credential review. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Settings (`ThermalCam/config.h`)
