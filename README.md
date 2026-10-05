@@ -136,9 +136,9 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
 ## 3a. Quick flash (no Arduino needed, default settings)
 
 `firmware/ThermalCam-full-flash-at-0x0.bin` is a new **source-attested build**
-of commit `55a4370d302cd2e7d74ab8f39f7849c4b1f6929e`, using core **3.3.12**
+of commit `11aa27458bc893646d41af18e95cc3110f438fe2`, using core **3.3.12**
 and GFX **1.6.8** with the parser hardening, private logging defaults and
-wireless-screen standby. Flash the same file to the camera and to a wireless screen.
+wireless-screen and camera standby. Flash the same file to the camera and to a wireless screen.
 Two independent local compiles produced identical ELF, application and merged
 bytes. See [firmware/manifest.json](firmware/manifest.json) for provenance and
 [firmware/README.md](firmware/README.md) for the exact checksum and **0x0** offset.
@@ -178,7 +178,7 @@ The following steps are owner-operated flashing instructions, not an audit test.
 
 ### Pinned release build (no upload)
 
-The complete October 4, 2026 build (Linux x86_64) passed with Arduino CLI **1.5.1**, esp32 core
+The complete October 5, 2026 build (Linux x86_64) passed with Arduino CLI **1.5.1**, esp32 core
 **3.3.12**, ESP-IDF **5.5.5**, Xtensa GCC **14.2.0**, esptool **5.3.1** and GFX
 **1.6.8** (revision `2685a776495be1f9eaf8c572cf876469bcc56585`).
 The exact board options are:

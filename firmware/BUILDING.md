@@ -1,6 +1,6 @@
 # Pinned, isolated release build (no upload)
 
-The October 4, 2026 build used Arduino CLI **1.5.1**, Linux x86_64, ESP32 core
+The October 5, 2026 build used Arduino CLI **1.5.1**, Linux x86_64, ESP32 core
 **3.3.12**, ESP-IDF **5.5.5**, Xtensa GCC **14.2.0 / esp-14.2.0_20260121**,
 esptool **5.3.1**, and Arduino_GFX **1.6.8**. Relevant upstream revisions,
 release-archive hashes, source-file hashes, ELF/application/merged-image hashes,
@@ -73,7 +73,7 @@ unused upstream drivers to make an incompatible dependency set appear to build.
 ## 2. Compile with neutral paths and fixed time
 
 Keep the variables from step 1. The exact published source is the preceding
-source commit `55a4370d302cd2e7d74ab8f39f7849c4b1f6929e`, with the `ThermalCam/`
+source commit `11aa27458bc893646d41af18e95cc3110f438fe2`, with the `ThermalCam/`
 tree recorded in the manifest. Later documentation/manifest commits do not
 change that code. Changes to source, defaults or dependencies require a new
 source commit, build and manifest; do not reuse this source attestation.
@@ -149,6 +149,6 @@ actual application ELF SHA-256; that matches the ELF hash in the manifest.
    Update manifest and tests together; run `git diff --check` and a fresh audit.
    Publication/settings/push and any hardware test require their own approval.
 
-No board was accessed, flashed or tested for the October 4 build. Historical
+No board was accessed, flashed or tested for the October 5 build. Historical
 firmware/source correspondence remains unproven; replacing the current file
 neither validates nor removes historical bytes or previously distributed copies.
