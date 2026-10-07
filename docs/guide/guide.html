@@ -361,7 +361,7 @@
   <div class="rule"></div>
 
   <img class="shot" src="../wireless-screen.png" alt="Camera and wireless screen">
-  <p class="caption">Left: the camera, with the <span class="badge">LIVE</span> badge showing a screen is watching. Right: the wireless screen, showing the same picture, palette, markers and readings. Simulated.</p>
+  <p class="caption">Left: the camera's display after a tap, with the <span class="badge">LIVE</span> badge showing a screen is watching (it stays dark otherwise). Right: the wireless screen, showing the same picture, palette, markers and readings. Simulated.</p>
 
   <div class="grid2" style="margin-top: 18px; align-items: start;">
     <div>
@@ -377,6 +377,7 @@
       <ul class="dots" style="font-size: 9.3pt;">
         <li>Palette and °C/°F follow the camera. Change them on the camera.</li>
         <li><span class="key pwr">PWR</span> on the screen saves what it shows to the <b>screen's own</b> card.</li>
+        <li>While the screen watches, the camera's own display <b>goes dark</b> to save battery. Tap it or press a button to turn it on.</li>
         <li>The camera only transmits while a screen is listening, and won't auto-off while one is.</li>
         <li>With several cameras nearby, the screen stays with the first one it hears.</li>
         <li>Both boards must use the same radio channel (channel 1 by default).</li>
@@ -463,7 +464,7 @@
 <section class="page">
   <div class="kicker"><span class="num">08</span>Camera · standby</div>
   <h2>Sleeps when the screen leaves.</h2>
-  <p class="lede">While a wireless screen shows its picture, the camera <b>never turns itself off</b>. When that screen is switched off or goes out of range, the camera waits about 20 seconds, then goes dark, and turns back on by itself when you switch the screen on again.</p>
+  <p class="lede">While a wireless screen shows its picture, the camera <b>never turns itself off</b>, and its own display stays dark until you tap it. When that screen is switched off or goes out of range, the camera waits about 20 seconds, goes into standby, and turns back on by itself when you switch the screen on again.</p>
   <div class="rule"></div>
 
   <svg viewBox="0 0 760 250" width="100%" style="display:block;">
@@ -478,7 +479,7 @@
     <g fill="#ffc814">
       <circle cx="425" cy="127" r="4"/><circle cx="470" cy="127" r="4"/><circle cx="515" cy="127" r="4"/><circle cx="560" cy="127" r="4"/><circle cx="605" cy="127" r="4"/>
     </g>
-    <text x="100" y="132" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-weight="700" font-size="14">Screen watching · LIVE</text>
+    <text x="100" y="132" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-weight="700" font-size="14">Screen watching</text>
     <text x="685" y="132" text-anchor="middle" fill="#fff" font-family="Space Grotesk" font-weight="700" font-size="14">Live again</text>
     <g stroke="#1b1530" stroke-width="1.5">
       <path d="M190 100 V154"/><path d="M305 100 V154" stroke-dasharray="3 3"/><path d="M390 100 V154"/><path d="M620 100 V154"/>
@@ -486,13 +487,14 @@
     <g font-family="Space Grotesk" font-weight="700" font-size="13" fill="#1b1530">
       <text x="190" y="70" text-anchor="middle">Screen</text><text x="190" y="86" text-anchor="middle">turns off</text>
       <text x="305" y="86" text-anchor="middle" font-size="12" fill="#e8452c">~13 s</text>
-      <text x="390" y="70" text-anchor="middle">~20 s</text><text x="390" y="86" text-anchor="middle">camera goes dark</text>
+      <text x="390" y="70" text-anchor="middle">~20 s</text><text x="390" y="86" text-anchor="middle">standby</text>
       <text x="620" y="70" text-anchor="middle">Screen</text><text x="620" y="86" text-anchor="middle">turns on</text>
     </g>
     <g font-size="11.5" fill="#4a4360" font-family="Inter">
-      <text x="100" y="172" text-anchor="middle">no countdown, no auto-off</text>
+      <text x="100" y="172" text-anchor="middle">camera display dark (tap for it)</text>
+      <text x="100" y="187" text-anchor="middle">never turns off</text>
       <text x="300" y="172" text-anchor="middle">“Standby in 10…” countdown</text>
-      <text x="300" y="187" text-anchor="middle">tap to keep using</text>
+      <text x="300" y="187" text-anchor="middle">(if its display is on)</text>
       <text x="505" y="172" text-anchor="middle">Standby · listens for a switched-on</text>
       <text x="505" y="187" text-anchor="middle">screen every 5 s (yellow dots)</text>
       <text x="685" y="172" text-anchor="middle">streaming again within</text>
@@ -515,8 +517,8 @@
     <div class="card">
       <h3>On USB power</h3>
       <ul class="dots" style="font-size: 9.2pt;">
-        <li>Only the camera's display goes dark; it keeps running.</li>
-        <li>The display lights up again <b>the moment</b> a screen connects.</li>
+        <li>The camera keeps running, with its display dark.</li>
+        <li>It streams again <b>the moment</b> a screen connects.</li>
       </ul>
     </div>
     <div class="card">
@@ -673,6 +675,7 @@
         <tr><th>Setting in config.h</th><th>Default</th></tr>
         <tr><td class="k">IDLE_OFF_SECONDS</td><td class="d">60</td></tr>
         <tr><td class="k">SCREEN_LINK_TIMEOUT_SECONDS</td><td class="d">20</td></tr>
+        <tr><td class="k">CAMERA_DISPLAY_OFF_WITH_SCREEN</td><td class="d">true</td></tr>
         <tr><td class="k">CAMERA_LINK_TIMEOUT_SECONDS</td><td class="d">20</td></tr>
         <tr><td class="k">STANDBY_CHECK_SECONDS</td><td class="d">5</td></tr>
         <tr><td class="k">STANDBY_MINUTES</td><td class="d">30</td></tr>
