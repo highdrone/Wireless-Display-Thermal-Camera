@@ -1,4 +1,5 @@
-// Host test: camera standby when its wireless screen goes away.
+// Host test: the camera with a wireless screen: its display stays dark while the
+// screen watches, and it goes into standby when the screen goes away.
 #include <Arduino.h>
 #include <Wire.h>
 #include <random>
@@ -115,7 +116,7 @@ static void camStep() {
   loop();
   if (idleWarnLeftMs && !firstWarnAt) {
     firstWarnAt = fakeMillis;
-    snprintf(warnText, sizeof warnText, "%s", willStandby() ? "Standby" : willPowerOff() ? "Turning off" : "Screen off");
+    snprintf(warnText, sizeof warnText, "%s", screenListening() ? "Screen off" : willStandby() ? "Standby" : willPowerOff() ? "Turning off" : "Screen off");  // as drawIdleWarning
   }
 }
 // Runs the camera until it deep-sleeps or `maxMs` passes; returns ms run, or 0 if it never slept.
@@ -141,7 +142,7 @@ static const char *wakeCamera(esp_sleep_wakeup_cause_t cause, const uint8_t *sen
   return r;
 }
 static void resetCamera() {  // back to a running camera that has never had a screen
-  isCamera = true; linkReady = true; mode = MODE_CAMERA; screenAsleep = false; idleWarnLeftMs = 0;
+  isCamera = true; linkReady = true; mode = MODE_CAMERA; screenAsleep = false; darkForLink = false; idleWarnLeftMs = 0;
   hadScreen = false; screenSeenMs = 0; lastHelloMs = 0; rtcStandby = false; screenOn = false; firstWarnAt = 0;
   lastActivityMs = fakeMillis;
 }
@@ -153,18 +154,34 @@ int main() {
   printf("cold start: camera=%d link=%d hadScreen=%d\n", isCamera, linkReady, hadScreen);
   resetCamera();
 
-  // 1. Screen connected: no auto-off at all.
+  // 1. Screen connected: no auto-off at all, and the camera's own display goes dark.
   screenOn = true; sentPackets.clear();
+  camStep(); camStep();
+  printf("screen connects: camera display %s\n", screenAsleep ? "off" : "ON (bad)");
   uint32_t slept = runUntilSleep(5 * 60 * 1000);
-  printf("battery, screen connected 5 min: auto-off=%s countdown=%s streamed=%zu packets\n", slept ? "YES (bad)" : "never",
-         firstWarnAt ? "YES (bad)" : "never", sentPackets.size());
+  printf("battery, screen connected 5 min: auto-off=%s countdown=%s display=%s streamed=%zu packets\n", slept ? "YES (bad)" : "never",
+         firstWarnAt ? "YES (bad)" : "never", screenAsleep ? "off" : "ON (bad)", sentPackets.size());
 
-  // 2. Screen switched off: camera counts down, then standby.
+  // 1b. A tap turns it on; it goes dark again after a minute without use, with a countdown.
+  touchSeen = true; const uint32_t tapAt = fakeMillis; camStep();
+  printf("tap while connected: display %s\n", screenAsleep ? "OFF (bad)" : "on");
+  firstWarnAt = 0;
+  while (!screenAsleep && fakeMillis - tapAt < 120000) camStep();
+  printf("then idle: countdown \"%s\" at %.1f s, dark again at %.1f s (deep sleep: never)\n", warnText, (firstWarnAt - tapAt) / 1000.0,
+         (fakeMillis - tapAt) / 1000.0);
+
+  // 1c. BOOT wakes it too, without changing the palette.
+  const uint8_t pal = paletteIdx;
+  bootPress(); camStep();
+  printf("BOOT while connected: display %s, palette %s\n", screenAsleep ? "OFF (bad)" : "on", paletteIdx == pal ? "unchanged" : "CHANGED (bad)");
+  while (!screenAsleep) camStep();
+
+  // 2. Screen switched off while the camera's display is dark: standby, without lighting up.
   screenOn = false; firstWarnAt = 0;
   const uint32_t lastHello = helloAt;
   slept = runUntilSleep(5 * 60 * 1000);
-  printf("screen gone: countdown \"%s\" at %.1f s, standby at %.1f s after the last hello; rtcStandby=%d asCamera=%d wakes every %llu s\n",
-         warnText, (firstWarnAt - lastHello) / 1000.0, (fakeMillis - lastHello) / 1000.0, rtcStandby, rtcStandbyCamera,
+  printf("screen gone: countdown shown=%s, standby at %.1f s after the last hello; rtcStandby=%d asCamera=%d wakes every %llu s\n",
+         firstWarnAt ? "YES (bad: display is dark)" : "no", (fakeMillis - lastHello) / 1000.0, rtcStandby, rtcStandbyCamera,
          (unsigned long long)(simTimerUs / 1000000));
   savePanel("cam_standby_msg");
 
@@ -185,7 +202,8 @@ int main() {
   delayHook = nullptr;
   screenOn = true; helloAt = fakeMillis; sentPackets.clear();
   for (int i = 0; i < 40; i++) camStep();
-  printf("after wake-up by screen: camera=%d hadScreen=%d streaming=%s\n", isCamera, hadScreen, sentPackets.empty() ? "no (bad)" : "yes");
+  printf("after wake-up by screen: camera=%d hadScreen=%d streaming=%s display=%s\n", isCamera, hadScreen,
+         sentPackets.empty() ? "no (bad)" : "yes", screenAsleep ? "off" : "ON (bad)");
 
   // 5. Someone uses the camera after the screen goes: normal 60 s limit from that touch.
   screenOn = false; firstWarnAt = 0;
@@ -194,16 +212,17 @@ int main() {
   slept = runUntilSleep(5 * 60 * 1000);
   printf("touched 5 s after the screen went: standby %.1f s after the touch (expect ~%d)\n", (fakeMillis - touchAt) / 1000.0, IDLE_OFF_SECONDS);
 
-  // 6. USB power: only the camera's display goes off, and comes back with the screen.
+  // 6. USB power: the camera keeps running; its display stays dark while a screen watches.
   resetCamera(); vbusPresent = true; for (int i = 0; i < 3; i++) camStep();
   screenOn = true; for (int i = 0; i < 40; i++) camStep();
+  printf("USB, screen connected: display %s\n", screenAsleep ? "off" : "ON (bad)");
   screenOn = false; firstWarnAt = 0;
-  const uint32_t goneAt = helloAt;
   slept = runUntilSleep(60 * 1000);
-  printf("USB, screen gone: deep sleep=%s display off=%d after %.1f s (countdown \"%s\")\n", slept ? "YES (bad)" : "no", screenAsleep,
-         (firstWarnAt - goneAt) / 1000.0 + IDLE_WARNING_SECONDS, warnText);
+  printf("USB, screen gone: deep sleep=%s, display %s\n", slept ? "YES (bad)" : "no", screenAsleep ? "off" : "ON (bad)");
   screenOn = true; helloAt = 0; camStep(); camStep();
-  printf("USB, screen back on: display on=%d\n", !screenAsleep);
+  printf("USB, screen back on: display %s\n", screenAsleep ? "off (stays dark)" : "ON (bad)");
+  touchSeen = true; camStep();
+  printf("USB, tap: display %s\n", screenAsleep ? "OFF (bad)" : "on");
 
   // 7. Battery, never had a screen: plain auto-off, no standby.
   resetCamera(); onBattery(); for (int i = 0; i < 3; i++) camStep();

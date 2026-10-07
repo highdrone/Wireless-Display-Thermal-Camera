@@ -85,10 +85,11 @@ Flash the **same firmware** to a second ESP32-S3-Touch-AMOLED-1.8 that has **no 
 
 - No Wi-Fi router or pairing is needed. The boards talk directly over ESP-NOW; expect a range of about a room or more.
 - Before the camera is on, the screen shows **Waiting for the thermal camera**. It shows that page again if the camera turns off or goes out of range.
-- While a screen is listening, the camera shows **LIVE** next to its battery level. The camera only transmits while a screen is listening. It also never auto-offs then, because someone is watching it remotely.
-- When the screen goes away (switched off, asleep or out of range), the camera turns off about 20 seconds later, after the usual countdown. Using the camera in the meantime brings back the normal 60 seconds.
+- The camera only transmits while a screen is listening, and never auto-offs then, because someone is watching it remotely.
+- The camera's own display **goes dark** while a screen watches, to save battery. Tap it or press a button to turn it on (that press does nothing else); it then shows **LIVE** next to its battery level, and goes dark again after a minute without use.
+- When the screen goes away (switched off, asleep or out of range), the camera turns off about 20 seconds later (with the usual countdown, if its display is on). Using the camera in the meantime brings back the normal 60 seconds.
   - **On battery:** the camera goes into **standby**. Every 5 seconds it wakes for a moment and listens for a screen that is switched on, so it turns back on by itself within a few seconds of you turning the screen on. A tap or BOOT turns it on straight away; PWR works too, but is only noticed at the next check. After 30 minutes in standby without a screen it powers off completely. Its thermal sensor stays powered in standby, so the camera uses more battery there than a sleeping screen does.
-  - **On USB power:** only the camera's display goes dark, and it lights up again when a screen connects.
+  - **On USB power:** the camera keeps running with its display dark, and streams again as soon as a screen connects.
 - Palette and °C/°F follow the camera. Change them on the camera; pressing BOOT on the screen's live view just says so.
 - PWR on the screen saves the picture it's showing to the **screen's own** microSD card. Swiping left to right on the screen browses the pictures on that card.
 - The screen stays on while pictures arrive. When they stop, it shows **Lost the camera's signal**. A 10-second countdown starts after 10 seconds, and the screen turns off after 20. Tap it to keep waiting. It also turns off 20 seconds after startup if no camera shows up.
@@ -258,6 +259,7 @@ history, compressed archive, binary or credential review. See [CONTRIBUTING.md](
 | `WIRELESS_SCREEN` | true | A board without a sensor becomes a wireless screen for the camera. False turns the radio off. |
 | `WIRELESS_CHANNEL` | 1 | Radio channel 1-13; the same on both boards |
 | `SCREEN_LINK_TIMEOUT_SECONDS` | 20 | The wireless screen turns off this long after the camera's pictures stop (0 = never) |
+| `CAMERA_DISPLAY_OFF_WITH_SCREEN` | true | The camera's display stays dark while a wireless screen shows the picture; a tap or button turns it on |
 | `CAMERA_LINK_TIMEOUT_SECONDS` | 20 | The camera turns off (standby on battery) this long after its wireless screen goes away (0 = no camera standby, normal auto-off) |
 | `STANDBY_CHECK_SECONDS` | 5 | In standby, the screen or camera looks for the other board this often. Shorter turns on sooner but uses more battery. |
 | `STANDBY_MINUTES` | 30 | A board in standby powers off completely after this long (0 = no standby, power off straight away) |

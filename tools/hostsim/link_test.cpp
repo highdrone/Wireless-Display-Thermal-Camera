@@ -111,6 +111,10 @@ int main() {
   // A screen says hello: the camera streams every frame.
   const uint8_t hello[] = {LINK_MAGIC, LINK_VERSION, PKT_HELLO, 0, 0};
   deliver(std::vector<uint8_t>(hello, hello + sizeof(hello)), 0x99);
+  frames(1);
+  printf("camera's own display while a screen watches: %s\n", screenAsleep ? "off" : "ON (bad)");
+  touchSeen = true;  // tap it on, to compare the two pictures
+  frames(1);
   sentPackets.clear();
   frames(1);
   const size_t perFrame = sentPackets.size();

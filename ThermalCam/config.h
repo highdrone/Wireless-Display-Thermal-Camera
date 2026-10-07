@@ -56,6 +56,11 @@
 // screen to keep using" countdown runs at the end. While you browse saved
 // pictures on it, IDLE_OFF_SECONDS applies instead.
 #define SCREEN_LINK_TIMEOUT_SECONDS 20
+// While a wireless screen shows the picture, the camera's own display stays
+// dark to save battery. Tap it or press a button to turn it on (that press
+// does nothing else); it goes dark again after IDLE_OFF_SECONDS without use.
+// false = keep the camera's display on.
+#define CAMERA_DISPLAY_OFF_WITH_SCREEN true
 // The camera never auto-offs while a wireless screen shows its picture. Once
 // that screen goes away (switched off, asleep or out of range), the camera
 // turns off this many seconds later, after the usual countdown. Using the

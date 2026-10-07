@@ -213,6 +213,7 @@ RTC_DATA_ATTR static char rtcSensorlessNote[96];     // the screen's I2C line, f
 static uint32_t lastActivityMs = 0;
 static uint32_t idleWarnLeftMs = 0;  // > 0 while the countdown is showing
 static bool screenAsleep = false;
+static bool darkForLink = false;  // camera: display off because a wireless screen shows the picture
 
 // ============================================================================
 //  I2C helpers
@@ -1030,7 +1031,7 @@ static bool willStandby() {
 static void drawIdleWarning(uint32_t msLeft, int16_t top = -1) {
   char line1[24];
   snprintf(line1, sizeof(line1), "%s in %u",
-           willStandby() ? "Standby" : willPowerOff() ? "Turning off" : "Screen off",
+           screenListening() ? "Screen off" : willStandby() ? "Standby" : willPowerOff() ? "Turning off" : "Screen off",
            (unsigned)((msLeft + 999) / 1000));
   static const char line2[] = "Tap screen to keep using";
   const int16_t w = max<int16_t>(strlen(line1) * 18, strlen(line2) * 12) + 32;
@@ -1326,8 +1327,9 @@ static void drawViewer() {
 //  Auto-off
 // ============================================================================
 
-static void sleepScreen() {
+static void sleepScreen(bool forLink = false) {
   screenAsleep = true;
+  darkForLink = forLink;
   idleWarnLeftMs = 0;
   panel->setBrightness(0);
   panel->displayOff();
@@ -1335,6 +1337,7 @@ static void sleepScreen() {
 
 static void wakeScreen() {
   screenAsleep = false;
+  darkForLink = false;
   panel->displayOn();
   panel->setBrightness(SCREEN_BRIGHTNESS);
   screenDirty = true;
@@ -1480,13 +1483,30 @@ static uint32_t idleLimitMs() {
 static void manageIdle() {
   const bool wasWarning = idleWarnLeftMs > 0;
   idleWarnLeftMs = 0;
-  const uint32_t limit = idleLimitMs();
-  if (!screenAsleep && limit > 0) {
-    const uint32_t idle = millis() - lastActivityMs;
-    if (idle >= limit) {
-      turnOff();
-    } else if (idle + IDLE_WARNING_SECONDS * 1000UL >= limit) {
-      idleWarnLeftMs = limit - idle;
+  const uint32_t now = millis();
+  if (isCamera && screenListening()) {
+    // A wireless screen shows the picture: never switch off. This display
+    // only goes dark again after a while without use.
+    const uint32_t limit = CAMERA_DISPLAY_OFF_WITH_SCREEN ? IDLE_OFF_SECONDS * 1000UL : 0;
+    if (!screenAsleep && limit > 0) {
+      const uint32_t idle = now - lastActivityMs;
+      if (idle >= limit) {
+        sleepScreen(true);
+      } else if (idle + IDLE_WARNING_SECONDS * 1000UL >= limit) {
+        idleWarnLeftMs = limit - idle;
+      }
+    }
+  } else {
+    // Count from the last use, or from when a wireless screen was last there.
+    const uint32_t since = (int32_t)(screenSeenMs - lastActivityMs) > 0 ? screenSeenMs : lastActivityMs;
+    const uint32_t limit = idleLimitMs();
+    if ((!screenAsleep || darkForLink) && limit > 0) {  // dark for a screen that has gone: still switch off
+      const uint32_t idle = now - since;
+      if (idle >= limit) {
+        turnOff();
+      } else if (!screenAsleep && idle + IDLE_WARNING_SECONDS * 1000UL >= limit) {
+        idleWarnLeftMs = limit - idle;
+      }
     }
   }
   if (wasWarning != (idleWarnLeftMs > 0)) viewerDirty = true;
@@ -1622,11 +1642,23 @@ void loop() {
     hadVbus = vbusPresent;
     noteActivity();
   }
-  if (screenListening()) {  // someone is watching remotely: stay on, and turn on with them
-    if (screenAsleep) wakeScreen();
+  static bool wasLinked = false;
+  const bool linked = screenListening();
+  if (linked) {  // someone is watching on a wireless screen
+    if (!wasLinked) {  // it just connected: this display goes dark (a tap or button turns it on)
+      if (!CAMERA_DISPLAY_OFF_WITH_SCREEN) {
+        if (screenAsleep) wakeScreen();
+      } else if (!screenAsleep) {
+        sleepScreen(true);
+      } else {
+        darkForLink = true;
+      }
+    }
+    if (!CAMERA_DISPLAY_OFF_WITH_SCREEN) lastActivityMs = millis();  // keep this display on
     hadScreen = true;
-    screenSeenMs = lastActivityMs = millis();
+    screenSeenMs = millis();
   }
+  wasLinked = linked;
   manageIdle();
 
   // ---- Frames keep flowing in every mode, so the smoothing stays current ----
