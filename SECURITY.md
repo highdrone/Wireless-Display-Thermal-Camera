@@ -31,6 +31,12 @@ commit.
   says hello like a screen. Either can also run down the battery. Set
   `WIRELESS_SCREEN false` to disable this firmware's radio link; do not use the
   link for sensitive scenes.
+- The HT-HC33 camera head (`ThermalCamHead`) broadcasts **color camera
+  pictures** as well as thermal data, over the same open ESP-NOW link, whenever
+  a screen asks for them. Anyone nearby with an ESP32 can watch what the head
+  sees, and any nearby device that says hello like a screen makes it stream.
+  Do not point it at anything private. It has no setting to turn the radio off,
+  because the radio is its only output.
 - There is no router password, cloud account, Internet upload, telemetry service
   or remote firmware updater in the application source. Dependency behavior
   and future changes still require review.

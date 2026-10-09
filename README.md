@@ -8,7 +8,7 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 
 ## User guide
 
-**[Download the illustrated user guide (PDF, 12 pages)](docs/user-guide.pdf)**: reading the screen, controls, palettes, saving and viewing pictures, the wireless screen, standby, auto-off, accurate readings, troubleshooting and updating the firmware.
+**[Download the illustrated user guide (PDF, 14 pages)](docs/user-guide.pdf)**: reading the screen, controls, palettes, saving and viewing pictures, the wireless screen, standby, the HT-HC33 color camera head, auto-off, accurate readings, troubleshooting and updating the firmware.
 
 [![Pages from the user guide](docs/user-guide-preview.png)](docs/user-guide.pdf)
 
@@ -21,6 +21,7 @@ Live thermal video from a **Waveshare MLX90640 thermal camera module** ("MLX9064
 - The picture is smoothed over time, so readings and markers stay steady while you aim. In simulation this made the center reading about 3 times steadier, and the markers stopped jumping between equally hot pixels. They still follow a moving object within about 0.1 s.
 - After a minute without use, a 10-second countdown appears. Tap the screen to keep going. Otherwise the camera turns off.
 - A second board with the same firmware and no sensor works as a wireless screen for the camera. On battery, each one waits in standby for the other and turns back on when it does.
+- A **Heltec HT-HC33** camera board with the sensor soldered on works as a headless **thermal + color camera**. The wireless screen lays the thermal picture over the color one (see [Thermal + color camera head](#thermal--color-camera-head-heltec-ht-hc33)).
 - The picture updates 16 times a second.
 - Both board revisions work: the original (SH8601 display) and V2 (CO5300 display). The sketch detects which one you have.
 
@@ -40,7 +41,9 @@ reflections, distance and sensor warm-up affect readings.
 The default wireless-screen mode broadcasts thermal data over **unencrypted,
 unauthenticated ESP-NOW**. There is no secure pairing. Anyone nearby can listen or
 impersonate a camera/screen. Set `WIRELESS_SCREEN false` in `ThermalCam/config.h`
-for sensitive scenes. Saved BMP/CSV captures are unencrypted on microSD and are
+for sensitive scenes. The HT-HC33 camera head also broadcasts **color
+pictures** the same way, so anyone nearby with an ESP32 can see what it sees.
+Saved BMP/CSV captures are unencrypted on microSD and are
 not automatically erased. Current source disables sensor-ID/temperature logging
 by default; do not share identifying debug logs or real captures. See [SECURITY.md](SECURITY.md).
 
@@ -54,6 +57,7 @@ the **1.8-inch AMOLED V1/V2** board, not a round/LCD board.
 - Waveshare MLX90640 thermal camera module ("MLX9064X Thermal Camera" board), the D55 (55°) or D110 (110°) version
 - Optional: a microSD card (FAT32) for saving pictures, and a LiPo battery for the board's battery connector
 - Optional: a second ESP32-S3-Touch-AMOLED-1.8 to use as a wireless screen
+- Optional: a Heltec HT-HC33 (ESP32-S3 with a color camera) as a thermal + color camera head, with the AMOLED board as its screen
 
 ## Controls
 
@@ -99,6 +103,121 @@ Flash the **same firmware** to a second ESP32-S3-Touch-AMOLED-1.8 that has **no 
 - If several cameras are nearby, the screen stays with the first one it hears.
 - The radio uses extra battery on the camera. Set `WIRELESS_SCREEN false` in `config.h` if you never use a second screen. Both boards must use the same `WIRELESS_CHANNEL`.
 
+## Thermal + color camera head (Heltec HT-HC33)
+
+A [Heltec HT-HC33](https://heltec.org/) (an ESP32-S3 board with an OV3660 color camera) with the MLX90640 soldered on becomes a **camera head with no display**. It streams the thermal frames and small color pictures to the AMOLED board, which shows them laid on top of each other.
+
+![The four views on the wireless screen](docs/fusion-views.png)
+
+*Simulated: the screen firmware drawing a made-up scene on a PC. The person, mug, can and window are the thermal tests' scene.*
+
+**You need:** the HT-HC33 (V1), the Waveshare MLX90640 module (D55 or D110), and an ESP32-S3-Touch-AMOLED-1.8 as the screen, without a sensor.
+
+### Wiring the sensor to the HT-HC33
+
+| Sensor board | HT-HC33 |
+| --- | --- |
+| VCC | **3V3** (J2 pin 1) |
+| GND | **GND** (J2 pin 2) |
+| SDA | **GPIO11** (J1, labeled `SD_MOSI` on Heltec's pin map) |
+| SCL | **GPIO10** (J1, labeled `SD_CS`) |
+
+- These are the microSD slot's lines, so **leave the microSD slot empty**.
+- If GPIO11/10 are awkward to reach, use **GPIO16** (`SD_MISO`) for SDA and **GPIO15** (`SD_CLK`) for SCL instead.
+  - The head tries both pairs, either way round, so it also finds the sensor with SDA and SCL swapped.
+  - Leave GPIO0 (the USER key), GPIO41 and the camera pins alone.
+- Check each pin on the board's silkscreen and Heltec's pin map before soldering. These pins come from Heltec's Arduino board definition and the datasheet; the schematic wasn't available.
+- Mount the sensor right next to the camera lens and point it the same way. The closer they are, the better the two pictures line up at every distance.
+
+### Flashing
+
+Flash each board with esptool-js at **0x0**, as in [Quick flash](#3a-quick-flash-no-arduino-needed-default-settings).
+
+- **HT-HC33:** use `firmware/ThermalCamHead-HT-HC33-full-flash-at-0x0.bin` (8 MB).
+  - The HT-HC33 has a USB-serial chip, so it normally connects by itself.
+  - If it doesn't, hold **USER** while pressing **RST**, then click Connect.
+- **AMOLED screen:** use the current `firmware/ThermalCam-full-flash-at-0x0.bin`. Older screen firmware ignores the color pictures. This one file still works as the AMOLED thermal camera and as its wireless screen.
+
+### Using it
+
+Turn on both boards. The screen shows **Waiting for the thermal camera** until it hears the head, then the live picture.
+
+**Views:** swipe **up or down** on the screen to step through them. The screen remembers the last one.
+
+| View | What you see |
+| --- | --- |
+| **Blend** | Thermal colors over the color picture |
+| **Edges** | The thermal picture with the color picture's outlines drawn in. Shows *what* is hot most clearly. |
+| **Color** | The color picture alone, with the temperature readings and markers |
+| **Thermal** | The thermal picture alone. The head stops sending color pictures, which saves radio time. |
+
+**Controls on the screen with a camera head:**
+
+- **BOOT:** short press = next palette, hold = °C/°F. With a camera head these are set on the screen, because the head has no buttons for them.
+- **PWR:** save what the screen shows to the screen's microSD card.
+- **Swipe left to right:** open the picture viewer.
+
+**Lining up the pictures:** point at something warm with clear edges, such as a mug or your hand, 1–2 m away. Then:
+
+1. Hold a finger still on the picture for about a second, until **Align** appears. The screen switches to Blend.
+2. Drag to move the thermal picture over the color one.
+3. BOOT short press = zoom in; hold = zoom out. Use these if the outlines are bigger or smaller than the warm shapes.
+4. PWR = flip the thermal picture: none, mirror, upside down, both.
+5. **Tap** to finish. The screen shows **Alignment saved** and keeps it after power-off.
+
+**On the head:**
+
+- The **USER key** switches the head off; press it again to turn it on.
+- Like the AMOLED camera, the head only transmits while a screen is listening.
+- About 20 seconds after the screen goes away, the head goes into standby. It wakes every 5 seconds to listen and streams again when the screen comes back. After 30 minutes it switches off completely; then use the USER key.
+- If the head has a problem, the screen's waiting page says what it is. For example, "Thermal sensor not found" lists the pins to check.
+- If the color pictures stop (weak radio, camera problem), the screen falls back to the thermal picture after 2 seconds.
+
+### Head settings (`ThermalCamHead/config.h`)
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `THERMAL_SDA` / `THERMAL_SCL` | 11 / 10 | Sensor pins tried first |
+| `THERMAL_ALT_SDA` / `THERMAL_ALT_SCL` | 16 / 15 | Sensor pins tried next |
+| `SENSOR_REFRESH_HZ` | 16 | Sensor sub-page rate: 4, 8, 16 or 32 |
+| `SMOOTHING` / `MIN_SPAN_C` | 0.6 / 3.0 | As on the AMOLED camera |
+| `COLOR_FRAME_SIZE` | `FRAMESIZE_QVGA` | Color picture size: 320×240, about 10 pictures a second. `FRAMESIZE_VGA` (640×480) is sharper but slower, and needs a strong radio link. |
+| `COLOR_JPEG_QUALITY` | 14 | 10 (best) to 40 (smallest) |
+| `COLOR_MAX_FPS` | 10 | Most color pictures per second |
+| `COLOR_VFLIP` / `COLOR_HMIRROR` | true / false | Turn the color picture the right way round |
+| `WIRELESS_CHANNEL` | 1 | The same as the screen's |
+| `RADIO_RATE` | `WIFI_PHY_RATE_11M_L` | Radio speed for the pictures. `WIFI_PHY_RATE_24M` is faster, with less range. |
+| `CAMERA_LINK_TIMEOUT_SECONDS`, `STANDBY_CHECK_SECONDS`, `STANDBY_MINUTES` | 20, 5, 30 | Standby, as on the AMOLED camera |
+
+The screen's settings for this are under [Settings](#settings-thermalcamconfigh): `FUSION_BLEND_PERCENT`, `FUSION_EDGE_PERCENT`, `THERMAL_FOV_DEG` and `COLOR_FOV_DEG`.
+
+**Building the head yourself:**
+
+1. Open `ThermalCamHead/ThermalCamHead.ino`. It needs no extra libraries; the camera driver comes with the ESP32 core.
+2. Set these board options:
+
+   | Setting | Value |
+   | --- | --- |
+   | Board | ESP32S3 Dev Module |
+   | USB CDC On Boot | Disabled |
+   | Flash Size | 8MB |
+   | Partition Scheme | 8M with spiffs (3MB APP/1.5MB SPIFFS) |
+   | PSRAM | OPI PSRAM |
+
+   The pinned options are `esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=default,FlashSize=8M,PartitionScheme=default_8MB,PSRAM=opi`.
+
+### Limits
+
+- **Not tested on hardware.** The behaviour was checked in the [host simulator](tools/hostsim/README.md) only.
+- The camera's lens is assumed to see about 120° across, more than either sensor version.
+  - The D55 sensor covers only the middle half of the color picture. The overlaid color is therefore about 160×120 pixels, enlarged and soft.
+  - `FRAMESIZE_VGA` makes it sharper. The D110 sensor matches the lens better.
+  - If your lens differs, change `COLOR_FOV_DEG` or just align on the screen.
+- The sensor and lens sit a few centimetres apart. Aligned at one distance, the pictures drift slightly apart much nearer than that.
+- The color pictures need far more radio time than the thermal frames, so the range is shorter than with the AMOLED camera.
+- The thermal sensor stays powered in standby.
+- The board's Wi-Fi HaLow module isn't used; the head holds it in reset.
+
 ## Auto-off
 
 The camera counts as idle when nobody presses a button, touches the screen, or plugs in or unplugs USB. After 50 idle seconds a countdown appears, and at 60 seconds:
@@ -143,9 +262,11 @@ The I2C pads connect to the board's internal I2C bus, which the touch, power and
 ## 3a. Quick flash (no Arduino needed, default settings)
 
 `firmware/ThermalCam-full-flash-at-0x0.bin` is a new **source-attested build**
-of commit `24585557e60ae37f7fe9b0d6b28d6be6492b9aa1`, using core **3.3.12**
-and GFX **1.6.8** with the parser hardening, private logging defaults and
-wireless-screen and camera standby. Flash the same file to the camera and to a wireless screen.
+of commit `259bf17c67609b251c08e4be7969831bfb50d698`, using core **3.3.12**
+and GFX **1.6.8** with the parser hardening, private logging defaults,
+wireless-screen and camera standby, and the color camera head views. Flash the same file to the camera and to a wireless screen.
+The HT-HC33 camera head has its own image, `firmware/ThermalCamHead-HT-HC33-full-flash-at-0x0.bin`
+(see [Thermal + color camera head](#thermal--color-camera-head-heltec-ht-hc33)).
 Two independent local compiles produced identical ELF, application and merged
 bytes. See [firmware/manifest.json](firmware/manifest.json) for provenance and
 [firmware/README.md](firmware/README.md) for the exact checksum and **0x0** offset.
@@ -185,7 +306,7 @@ The following steps are owner-operated flashing instructions, not an audit test.
 
 ### Pinned release build (no upload)
 
-The complete October 7, 2026 build (Linux x86_64) passed with Arduino CLI **1.5.1**, esp32 core
+The complete October 9, 2026 builds (Linux x86_64) passed with Arduino CLI **1.5.1**, esp32 core
 **3.3.12**, ESP-IDF **5.5.5**, Xtensa GCC **14.2.0**, esptool **5.3.1** and GFX
 **1.6.8** (revision `2685a776495be1f9eaf8c572cf876469bcc56585`).
 The exact board options are:
@@ -236,9 +357,9 @@ git diff --check
 Requires Python 3.9+ and Clang/GCC with C++11 and address/undefined-behavior
 sanitizers. Tests exercise malformed BMP headers, palette endpoints, privacy
 regressions, preserved defaults, ignore rules, source/notice hashes, current manifest checksum, merged components,
-image integrity, partition layout and blank NVS.
+image integrity, partition layout and blank NVS for both firmware images, and that the screen and camera head share one link protocol.
 CI runs these offline checks only; it does not build the ESP32 firmware or test
-a physical board. For behaviour (markers, wireless link, standby), run the host
+a physical board. For behaviour (markers, wireless link, standby, camera head and color views), run the host
 simulation tests in [tools/hostsim](tools/hostsim/README.md). Release image helpers are
 in `tools/release/`, and the user guide's source is in [docs/guide](docs/guide/README.md). The worktree privacy checker does not replace a full Git
 history, compressed archive, binary or credential review. See [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -263,6 +384,9 @@ history, compressed archive, binary or credential review. See [CONTRIBUTING.md](
 | `CAMERA_LINK_TIMEOUT_SECONDS` | 20 | The camera turns off (standby on battery) this long after its wireless screen goes away (0 = no camera standby, normal auto-off) |
 | `STANDBY_CHECK_SECONDS` | 5 | In standby, the screen or camera looks for the other board this often. Shorter turns on sooner but uses more battery. |
 | `STANDBY_MINUTES` | 30 | A board in standby powers off completely after this long (0 = no standby, power off straight away) |
+| `FUSION_BLEND_PERCENT` | 55 | With a color camera head: how strongly Blend's thermal colors cover the color picture (0-100) |
+| `FUSION_EDGE_PERCENT` | 75 | With a color camera head: how bright Edges draws the color picture's outlines (0-100) |
+| `THERMAL_FOV_DEG` / `COLOR_FOV_DEG` | 55 / 120 | Starting alignment: how wide the thermal sensor and the color camera see, in degrees. Fine-tune on the screen. |
 | `IDLE_OFF_SECONDS` | 60 | Turn off after this many idle seconds (0 = never) |
 | `IDLE_WARNING_SECONDS` | 10 | Length of the "tap screen to keep using" countdown |
 | `MIN_SPAN_C` | 3.0 | Smallest temperature range the colors stretch over. Stops noise from looking like detail. |
@@ -297,6 +421,8 @@ history, compressed archive, binary or credential review. See [CONTRIBUTING.md](
 - The viewer lists `IMG_*.bmp` in the card's `thermal` folder and decodes the chosen one into the frame buffer.
 - Wireless screen: the screen broadcasts a short hello twice a second over ESP-NOW. While the camera hears one, it broadcasts each smoothed frame after processing it: one packet of settings and readouts, then 7 packets of temperatures in 1/100 °C. The screen puts the frame back together and draws it with the same code as the camera. So it matches the camera's screen to within 0.01 °C, apart from the LIVE badge.
 - Standby: the board's chip goes into deep sleep with its display off, and a timer wakes it every few seconds. A screen sends a "probe" hello and listens for half a second; the camera answers a probe with one frame but doesn't count it as a viewer, so a sleeping screen doesn't keep the camera from auto-off. A camera listens for 0.6 s for an ordinary hello, which only a switched-on screen sends (twice a second); it ignores probes, so two boards in standby can't keep waking each other up. The touch interrupt and BOOT can also wake the chip. The PWR button can't, because it goes to the power chip, which only latches the press until the next check.
+
+- Camera head: the HT-HC33 reads the sensor on core 0, like the AMOLED camera, and sends the same frame packets marked "headless". While the screen's hellos ask for color (any view but Thermal), the head also takes JPEG pictures from the camera. It sends each one in 1400-byte pieces (ESP-NOW v2) at 11 Mbps. The screen reassembles each picture, decodes it on core 0 and finds its outlines (a Sobel filter). Core 1 then draws the chosen view, pixel by pixel, through the saved alignment.
 
 ## License and credits
 

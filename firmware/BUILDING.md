@@ -1,6 +1,6 @@
 # Pinned, isolated release build (no upload)
 
-The October 7, 2026 build used Arduino CLI **1.5.1**, Linux x86_64, ESP32 core
+The October 9, 2026 builds used Arduino CLI **1.5.1**, Linux x86_64, ESP32 core
 **3.3.12**, ESP-IDF **5.5.5**, Xtensa GCC **14.2.0 / esp-14.2.0_20260121**,
 esptool **5.3.1**, and Arduino_GFX **1.6.8**. Relevant upstream revisions,
 release-archive hashes, source-file hashes, ELF/application/merged-image hashes,
@@ -73,7 +73,7 @@ unused upstream drivers to make an incompatible dependency set appear to build.
 ## 2. Compile with neutral paths and fixed time
 
 Keep the variables from step 1. The exact published source is the preceding
-source commit `24585557e60ae37f7fe9b0d6b28d6be6492b9aa1`, with the `ThermalCam/`
+source commit `259bf17c67609b251c08e4be7969831bfb50d698`, with the `ThermalCam/`
 tree recorded in the manifest. Later documentation/manifest commits do not
 change that code. Changes to source, defaults or dependencies require a new
 source commit, build and manifest; do not reuse this source attestation.
@@ -125,6 +125,33 @@ version `6671d0b`, and the SDK's September 16, 2026 build date. Those fields are
 **not** the thermal source commit or this compile's date. esptool inserts the
 actual application ELF SHA-256; that matches the ELF hash in the manifest.
 
+### The HT-HC33 camera head
+
+Build `ThermalCamHead` the same way, in another new build directory and with a
+fresh cache. It needs no `--library` (the camera driver and JPEG decoder come
+with the core), and uses these board options:
+
+```sh
+B="$STATE/build-continuation/head-a"
+mkdir -p "$B"
+FLAGS="-ffile-prefix-map=$REPO=/src/esp32-thermal-camera -fdebug-prefix-map=$REPO=/src/esp32-thermal-camera -ffile-prefix-map=$STATE=/toolchain -fdebug-prefix-map=$STATE=/toolchain -ffile-prefix-map=$B=/build/output -fdebug-prefix-map=$B=/build/output"
+env -i PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+  HOME="$STATE/arduino-isolated/home" TMPDIR="$STATE/arduino-isolated/tmp" \
+  LANG=C LC_ALL=C TZ=UTC SOURCE_DATE_EPOCH=1791051543 PYTHONDONTWRITEBYTECODE=1 \
+  arduino-cli --config-file "$CFG" --no-color compile \
+  --fqbn 'esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=default,FlashSize=8M,PartitionScheme=default_8MB,PSRAM=opi' \
+  --build-path "$B" --jobs 2 --verbose \
+  --build-property "compiler.cpp.extra_flags=$FLAGS" \
+  --build-property "compiler.c.extra_flags=$FLAGS" \
+  --build-property "compiler.S.extra_flags=$FLAGS" \
+  "$REPO/ThermalCamHead" > "$STATE/compile-head.log" 2>&1
+```
+
+Its merged image is **8,388,608 bytes** with the same four inputs at the same
+offsets (`ThermalCamHead.ino.*`), and blank NVS, second app, SPIFFS and
+coredump partitions. `tools/release/verify_image.py` checks either build
+directory, and `head-manifest.json` records the result.
+
 ## 3. Release gate
 
 1. Commit intended source first; record its commit and code-tree hash. Check
@@ -143,12 +170,12 @@ actual application ELF SHA-256; that matches the ELF hash in the manifest.
    the applicable licenses; these instructions impose no extra restriction.
 5. Repeat in a separate **new** build directory/cache with the same epoch and
    normalized paths. Compare the actual ELF, app and merged bytes. Two local
-   builds were byte-identical for this artifact; other hosts/toolchains and
+   builds were byte-identical for each artifact; other hosts/toolchains and
    future downloads are not certified bitwise reproducible.
 6. Preserve the prior binary privately before replacing the tracked candidate.
    Update manifest and tests together; run `git diff --check` and a fresh audit.
    Publication/settings/push and any hardware test require their own approval.
 
-No board was accessed, flashed or tested for the October 7 build. Historical
+No board was accessed, flashed or tested for the October 9 builds. Historical
 firmware/source correspondence remains unproven; replacing the current file
 neither validates nor removes historical bytes or previously distributed copies.

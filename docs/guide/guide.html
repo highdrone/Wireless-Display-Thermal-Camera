@@ -108,6 +108,8 @@
   table.ctl tr:last-child td { border-bottom: none; }
   table.ctl td:first-child { width: 42%; white-space: nowrap; }
   table.ctl td:last-child { color: var(--ink); }
+  table.ctl.views td { padding: 5px 8px; font-size: 9.2pt; }
+  table.ctl.views td:first-child { width: 22%; }
 
   .shot { width: 100%; display: block; border-radius: 12px; box-shadow: 0 10px 28px rgba(15,10,30,0.22); }
   .frame {
@@ -197,7 +199,7 @@
   <div class="temps"><span>16 frames / s</span><span>32 × 24 sensor</span><span>°C / °F</span><span>Wireless screen</span></div>
   <div class="device"><img src="../../preview.png" alt=""></div>
   <div class="band"></div>
-  <div class="bottom"><span>Waveshare ESP32-S3-Touch-AMOLED-1.8</span><span>Firmware with screen &amp; camera standby</span></div>
+  <div class="bottom"><span>Waveshare ESP32-S3-Touch-AMOLED-1.8</span><span>Wireless screen &amp; color camera head</span></div>
 </section>
 
 <!-- ============================ QUICK START + SCREEN ============================ -->
@@ -536,9 +538,90 @@
   <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>08</span></div>
 </section>
 
+<!-- ============================ COLOR HEAD: WIRING ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">09</span>Color camera head</div>
+  <h2>Add color with a Heltec HT-HC33.</h2>
+  <p class="lede">Solder the thermal sensor to a <b>Heltec HT-HC33</b> camera board instead, and it becomes a small <b>camera head with no screen</b>. It sends the thermal picture and a color picture to the AMOLED board, which lays one over the other.</p>
+  <div class="rule"></div>
+
+  <div class="grid2" style="align-items: start;">
+    <div class="card">
+      <h3>Wire the sensor</h3>
+      <table class="kv">
+        <tr><th>Sensor board</th><th>HT-HC33</th></tr>
+        <tr><td class="k">VCC</td><td><b>3V3</b> · J2 pin 1</td></tr>
+        <tr><td class="k">GND</td><td><b>GND</b> · J2 pin 2</td></tr>
+        <tr><td class="k">SDA</td><td><b>GPIO11</b> · J1 “SD_MOSI”</td></tr>
+        <tr><td class="k">SCL</td><td><b>GPIO10</b> · J1 “SD_CS”</td></tr>
+      </table>
+      <p class="small" style="margin: 10px 0 0;">Or use <b>GPIO16</b> (“SD_MISO”) for SDA and <b>GPIO15</b> (“SD_CLK”) for SCL. The head tries both pairs, either way round. Check each pin on the board before soldering.</p>
+    </div>
+    <div>
+      <div class="tip" style="margin-bottom: 12px;"><b>Leave the microSD slot empty.</b> These pins are the slot's lines; the head uses them for the sensor.</div>
+      <div class="tip" style="margin-bottom: 12px;"><b>Mount the sensor next to the lens.</b> Point both the same way, as close together as you can, so the two pictures line up at every distance.</div>
+      <div class="tip"><b>Don't use</b> GPIO0 (the USER key), GPIO41 or the camera's pins.</div>
+    </div>
+  </div>
+
+  <div class="kicker" style="margin-top: 24px;">Flash both boards</div>
+  <div class="grid2" style="align-items: start;">
+    <ol class="steps">
+      <li><b>The HT-HC33</b>Program <span class="mono">ThermalCamHead-HT-HC33-full-flash-at-0x0.bin</span> at <span class="mono"><b>0x0</b></span> with esptool-js, as on page 14. If it won't connect, hold <span class="key">USER</span> while pressing <span class="key">RST</span>.</li>
+      <li><b>The AMOLED screen</b>Program the current <span class="mono">ThermalCam-full-flash-at-0x0.bin</span>. Older screen firmware ignores the color pictures.</li>
+      <li><b>Turn both on</b>The screen shows <i>Waiting for the thermal camera</i> until it hears the head, then the live picture.</li>
+    </ol>
+    <div class="card dark">
+      <h3>The head</h3>
+      <ul class="dots" style="font-size: 9.5pt;">
+        <li>Press <span class="key">USER</span> to switch it off; press again to turn it on.</li>
+        <li>It only transmits while a screen is listening.</li>
+        <li>About 20 s after the screen goes away it goes into <b>standby</b>, and comes back by itself when the screen does. After 30 minutes it switches off.</li>
+        <li>Problems (no sensor, camera failed) show on the screen's waiting page.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>09</span></div>
+</section>
+
+<!-- ============================ COLOR HEAD: VIEWS ============================ -->
+<section class="page">
+  <div class="kicker"><span class="num">10</span>Thermal over color</div>
+  <h2>Four ways to look.</h2>
+  <p class="lede">Swipe <b>up or down</b> on the screen to step through the views. The screen remembers the last one.</p>
+  <div class="rule"></div>
+
+  <div class="frame" style="padding: 10px; border-radius: 20px; width: 4.9in; margin: 0 auto;"><img src="../fusion-views.png" alt="Blend, Edges, Color and Thermal views"></div>
+  <p class="caption" style="text-align: center;">Simulated: the screen firmware drawing the guide's made-up scene on a PC.</p>
+
+  <div class="grid2" style="margin-top: 10px; align-items: start;">
+    <div class="card">
+      <table class="ctl views">
+        <tr><td><b>Blend</b></td><td>Thermal colors over the color picture</td></tr>
+        <tr><td><b>Edges</b></td><td>Thermal, with the color picture's outlines: shows <i>what</i> is hot</td></tr>
+        <tr><td><b>Color</b></td><td>The color picture, with the readings</td></tr>
+        <tr><td><b>Thermal</b></td><td>Thermal only; no color pictures are sent</td></tr>
+      </table>
+      <p class="small" style="margin: 8px 0 0;">With a head, <span class="key">BOOT</span> on the screen sets the palette and °C/°F. <span class="key pwr">PWR</span> saves what the screen shows.</p>
+    </div>
+    <div class="card">
+      <h3>Line them up</h3>
+      <p class="small">Aim at something warm with clear edges, 1–2 m away.</p>
+      <ul class="dots" style="font-size: 9.2pt;">
+        <li><b>Hold a finger still</b> on the picture for about a second, until <i>Align</i> appears.</li>
+        <li><b>Drag</b> to move the thermal picture over the color one.</li>
+        <li><span class="key">BOOT</span> zoom in · hold to zoom out.</li>
+        <li><span class="key pwr">PWR</span> flip: none, mirror, upside down, both.</li>
+        <li><b>Tap</b> to finish: <i>Alignment saved</i>.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>10</span></div>
+</section>
+
 <!-- ============================ POWER ============================ -->
 <section class="page">
-  <div class="kicker"><span class="num">09</span>Power &amp; auto-off</div>
+  <div class="kicker"><span class="num">11</span>Power &amp; auto-off</div>
   <h2>Saves battery when you forget.</h2>
   <p class="lede">The camera counts as idle when nobody presses a button, touches the screen, or plugs in or unplugs USB. After a minute of that, it turns off.</p>
   <div class="rule"></div>
@@ -572,12 +655,12 @@
   </div>
 
   <div class="tip" style="margin-top: 16px;"><b>Someone watching remotely keeps it on.</b> While a wireless screen is showing the camera's picture, the camera doesn't auto-off.</div>
-  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>09</span></div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>11</span></div>
 </section>
 
 <!-- ============================ ACCURACY + SAFETY ============================ -->
 <section class="page">
-  <div class="kicker"><span class="num">10</span>Getting good readings</div>
+  <div class="kicker"><span class="num">12</span>Getting good readings</div>
   <h2>What the numbers mean.</h2>
   <p class="lede">A thermal camera reads the heat a surface gives off. Most surfaces behave the same way, but some don't, and it helps to know which.</p>
   <div class="rule"></div>
@@ -603,21 +686,21 @@
     </div>
   </div>
 
-  <div class="kicker" style="margin-top: 30px;"><span class="num">11</span>Safety &amp; privacy</div>
+  <div class="kicker" style="margin-top: 30px;"><span class="num">13</span>Safety &amp; privacy</div>
   <div class="card dark" style="padding: 18px 20px;">
     <ul class="dots" style="font-size: 9.6pt; margin: 0;">
       <li>This is a <b>hobby thermal imager</b>, not a medical instrument, fire alarm or electrical-safety tester. Never use its readings as the only basis for a health or safety decision.</li>
-      <li>The wireless link is <b>unencrypted and unauthenticated</b>. Anyone nearby with the right equipment can receive the picture, or pretend to be a camera or a screen. Don't use it for sensitive scenes.</li>
+      <li>The wireless link is <b>unencrypted and unauthenticated</b>. Anyone nearby with the right equipment can receive the picture (including the color camera head's color pictures), or pretend to be a camera or a screen. Don't use it for sensitive scenes.</li>
       <li>Saved pictures on the microSD card are <b>not encrypted</b>. Wipe the card before you lend or give the device away.</li>
       <li>Wire the sensor at <b>3.3 V</b> with power disconnected, and keep its wires short.</li>
     </ul>
   </div>
-  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>10</span></div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>12</span></div>
 </section>
 
 <!-- ============================ TROUBLESHOOTING ============================ -->
 <section class="page">
-  <div class="kicker"><span class="num">12</span>Troubleshooting</div>
+  <div class="kicker"><span class="num">14</span>Troubleshooting</div>
   <h2>If something's not right.</h2>
   <div class="rule"></div>
 
@@ -635,14 +718,14 @@
     <div class="t"><b>Text clipped in the corners</b>Raise <span class="mono">SCREEN_CORNER_RADIUS</span> in <span class="mono">config.h</span>.</div>
     <div class="t"><b>Picture moves the wrong way</b>Mount the sensor pointing away from you. If it still pans backwards, change <span class="mono">MIRROR_IMAGE</span>; if upside down, set <span class="mono">SCREEN_ROTATION</span> to 3.</div>
   </div>
-  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>11</span></div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>13</span></div>
 </section>
 
 <!-- ============================ FIRMWARE + SPECS ============================ -->
 <section class="page">
-  <div class="kicker"><span class="num">13</span>Updating the firmware</div>
+  <div class="kicker"><span class="num">15</span>Updating the firmware</div>
   <h2>Flash from your browser.</h2>
-  <p class="lede">No software to install. Use the ready-made firmware file from the project's <span class="mono">firmware</span> folder, and flash the <b>same file</b> to the camera and to any wireless screen.</p>
+  <p class="lede">No software to install. Use the ready-made firmware file from the project's <span class="mono">firmware</span> folder, and flash the <b>same file</b> to the camera and to any wireless screen. The HT-HC33 color camera head has its own file (page 09).</p>
   <div class="rule"></div>
 
   <div class="grid2" style="align-items: start;">
@@ -667,6 +750,7 @@
         <tr><td>Storage</td><td>microSD (FAT32): BMP + CSV</td></tr>
         <tr><td>Wireless</td><td>ESP-NOW, about a room of range</td></tr>
         <tr><td>Boards</td><td>Waveshare ESP32-S3-Touch-AMOLED-1.8, original and V2</td></tr>
+        <tr><td>Color head</td><td>Heltec HT-HC33 (optional)</td></tr>
       </table>
     </div>
     <div>
@@ -686,7 +770,7 @@
       <p class="small" style="margin-top: 8px;">Changing these needs an Arduino build; see the project README.</p>
     </div>
   </div>
-  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>12</span></div>
+  <div class="foot"><span><b>Thermal Camera</b> · User guide</span><span>14</span></div>
 </section>
 
 </body>

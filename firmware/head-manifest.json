@@ -1,97 +1,80 @@
 {
   "schema_version": 2,
-  "file": "ThermalCam-full-flash-at-0x0.bin",
-  "bytes": 16777216,
-  "sha256": "59bc5238dd1e37d50f26bf4988154b090dce8d1ca72f4395041c2e107aea6160",
+  "file": "ThermalCamHead-HT-HC33-full-flash-at-0x0.bin",
+  "bytes": 8388608,
+  "sha256": "99dd5ad72035dbb59df08124b6c138360ea1afbb47eb6a780fba377545340bc8",
   "flash_offset": "0x0",
-  "board": "Waveshare ESP32-S3-Touch-AMOLED-1.8 (V1 SH8601 / V2 CO5300)",
-  "sensor": "MLX90640",
+  "board": "Heltec HT-HC33 V1 (ESP32-S3R8, 8 MB flash, OV3660 camera)",
+  "sensor": "MLX90640 (soldered to GPIO11/GPIO10 or GPIO16/GPIO15) and the on-board OV3660 color camera",
+  "role": "Headless thermal + color camera head; the wireless screen is ThermalCam (firmware/manifest.json)",
   "provenance": "compiled from attested source; offline verified; no hardware test",
   "source_commit": "259bf17c67609b251c08e4be7969831bfb50d698",
   "source_tree": {
-    "path": "ThermalCam",
-    "git_tree": "9c141e8f69f2c48503ffb0d86e8a5cc65702b62e",
+    "path": "ThermalCamHead",
+    "git_tree": "f1e424557e0aa7063a3063a3a020b0e50315163b",
     "files": [
       {
-        "path": "ThermalCam/ThermalCam.cpp",
-        "git_blob": "93ace30a6fe66a4169b1a1c374f15de8bf613430",
-        "bytes": 73955,
-        "sha256": "41325dec969ce29214850ea3c0d03e12d50d2fddc30252ad2f5c831781156696"
+        "path": "ThermalCamHead/ThermalCamHead.cpp",
+        "git_blob": "591d4d78387ed523fb2fcab3179ecb9e1aa735b7",
+        "bytes": 21080,
+        "sha256": "06d99088e81399dad79951abbf7a66b1dc9a4bc504e62305a187f0ada2934c5c"
       },
       {
-        "path": "ThermalCam/ThermalCam.ino",
-        "git_blob": "4e6e4aba19e26cda785f51f0162ab5cb53cc5cc1",
-        "bytes": 141,
-        "sha256": "675b1e292c019c697eb2d94022bc26c30aee1eaf5140e019021f627f76435fde"
+        "path": "ThermalCamHead/ThermalCamHead.ino",
+        "git_blob": "0f87d29fb9c783807a1bf5d2834f43297a63cc63",
+        "bytes": 126,
+        "sha256": "e35862e0968831a02dd0ed3f324190ef14c3ee972a0fc85b591f4819ff9deb01"
       },
       {
-        "path": "ThermalCam/bmp_header.h",
-        "git_blob": "1225ef2082c503d36113e42eab7bb2b240dc0edb",
-        "bytes": 1382,
-        "sha256": "da776b9d017a121c7227fd96de947936ccf72d8d27fd0c193789f39a41793d92"
+        "path": "ThermalCamHead/config.h",
+        "git_blob": "8e3da9d8857f12d611520183e6841b10432042a8",
+        "bytes": 2808,
+        "sha256": "95fbe8af3fc134af30b2fe181e665405acffdec19b9c9b201a4866aa46429cfc"
       },
       {
-        "path": "ThermalCam/color_stream.h",
-        "git_blob": "8ec89ce46d72fd981f0fb901ec5101dddaf9e8bf",
-        "bytes": 6764,
-        "sha256": "ba3711f9d7bd0072b6bac135c72d74800fd85107a98449748386eafa3dd56e12"
-      },
-      {
-        "path": "ThermalCam/config.h",
-        "git_blob": "4042dc89a5acef12db96b3865b78a992c590f6a3",
-        "bytes": 6027,
-        "sha256": "ab7cf19a070343bdd83bb2e05e08a04e26cc190cd0c0c68ced3a6c78999d652e"
-      },
-      {
-        "path": "ThermalCam/link_protocol.h",
+        "path": "ThermalCamHead/link_protocol.h",
         "git_blob": "248f66a690b8a71b5f77713d90e916096360bfd4",
         "bytes": 2253,
         "sha256": "ead8eec9a1ce190c893e3af8854b2caa7f41c24d10900695deef28f75ca33015"
       },
       {
-        "path": "ThermalCam/palettes.h",
-        "git_blob": "0fe0862d07d253e5649d09a29d73f7ee4f7087af",
-        "bytes": 2049,
-        "sha256": "34b0faeb10fef848431ce63464e19012536b3d1ba9f4c825e36e25874356c886"
-      },
-      {
-        "path": "ThermalCam/src/mlx90640/LICENSE",
+        "path": "ThermalCamHead/src/mlx90640/LICENSE",
         "git_blob": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64",
         "bytes": 11357,
         "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
       },
       {
-        "path": "ThermalCam/src/mlx90640/MLX90640_API.c",
+        "path": "ThermalCamHead/src/mlx90640/MLX90640_API.c",
         "git_blob": "fbe45fd26ce596e455311f36b215f20788174c05",
         "bytes": 42050,
         "sha256": "9ddb79f3ec59dac7b20c912511499b443a1da212600a0eb5a44229f6aa3a79ee"
       },
       {
-        "path": "ThermalCam/src/mlx90640/MLX90640_API.h",
+        "path": "ThermalCamHead/src/mlx90640/MLX90640_API.h",
         "git_blob": "551bf3225e4d6feebb42e0d46ae721c07055df90",
         "bytes": 5239,
         "sha256": "6cf506c4b199d547f0d41cfa280456c34c91e2c0b7927900cd901f07e14467d6"
       },
       {
-        "path": "ThermalCam/src/mlx90640/MLX90640_I2C_Driver.cpp",
+        "path": "ThermalCamHead/src/mlx90640/MLX90640_I2C_Driver.cpp",
         "git_blob": "555730856e37829356b7d5069818008c5461322e",
         "bytes": 1964,
         "sha256": "d5b045f2f42691731334dbba4da1ca5d6dc29db0c493f4b00aeb75ad605f33e6"
       },
       {
-        "path": "ThermalCam/src/mlx90640/MLX90640_I2C_Driver.h",
+        "path": "ThermalCamHead/src/mlx90640/MLX90640_I2C_Driver.h",
         "git_blob": "005b195912fcc1ea3ac1021016ea2d88e6f61729",
         "bytes": 1090,
         "sha256": "9def89b1b656850a11fc24f8e1b93b33e0237ec969e44870b30d41bad19d79d3"
       },
       {
-        "path": "ThermalCam/src/mlx90640/README.md",
+        "path": "ThermalCamHead/src/mlx90640/README.md",
         "git_blob": "8fec17d8bac0e753b0734d5daf5b55f0d1721e17",
         "bytes": 382,
         "sha256": "dd5a89761c2b593ce7ebd609700fbd161a2d1725ba4e3276ecde97a8d23beb55"
       },
       {
-        "path": "ThermalCam/src/mlx90640/mlx90640.h",
+        "path": "ThermalCamHead/src/mlx90640/mlx90640.h",
         "git_blob": "cda3fae087af5a9d5d1579b281433ee175ef977c",
         "bytes": 214,
         "sha256": "c0258ac5500f75e6362d56a24654a647a2422f77bc7361505a8a8c812d610ebe"
@@ -102,7 +85,7 @@
     "date": "2026-10-09",
     "host": "Linux x86_64",
     "arduino_cli": "1.5.1",
-    "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi",
+    "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=default,FlashSize=8M,PartitionScheme=default_8MB,PSRAM=opi",
     "source_date_epoch": 1791051543,
     "jobs": 2,
     "recipe": "firmware/BUILDING.md",
@@ -114,12 +97,12 @@
     },
     "platform_compiler_flags": "compiler.c.flags/compiler.cpp.flags retained, including -MMD -c; only extra_flags override",
     "application_elf": {
-      "bytes": 18265088,
-      "sha256": "09e1aa6504137e2b6fe69ab75a5e70cb88972557eb63b9190bcb241c6edb4321"
+      "bytes": 13517188,
+      "sha256": "d875bf1c93377c52de8323ce5dfbcd1660eaba0b2b8e5018b72fb0c2f4522617"
     },
     "application": {
-      "bytes": 1106208,
-      "sha256": "71a30772fa57320cd8543a8cfef8a5aea671e4f3a9711a4c5a7a0706b7ae1b98"
+      "bytes": 988576,
+      "sha256": "bc1a254e7a1f3430015d12e280dcdffeeab0cbf944169263e9a7e1e804a55d5f"
     },
     "repeat_build": {
       "full_compiles": 2,
@@ -146,18 +129,7 @@
       "ldflags": "versionString=1.5.1, commit=01f3d4f, date=2026-06-05T09:39:33Z",
       "note": "Compiled from the tagged source because the release download was unreachable from the build host. An official Arduino CLI 1.3.1 binary produced byte-identical ELF, application and merged images from the same source."
     },
-    "host_os_label": "The Arduino core embeds the build host OS name (ARDUINO_HOST_OS: \"linux\" here, \"macosx\" in the previous image) in the application. Images built from the same source on different host operating systems therefore differ in that string, in the addresses after it, and in the ELF hash.",
-    "cross_check_previous_source": {
-      "source_commit": "824933755386262ea5472ff1e908bb8ddc78c97e",
-      "git_tree": "42e38bc67e21dac0417539ebf333fe9203ad3f26",
-      "published_application_sha256": "5aed0a593677b9bdaab176e03188cf5f81022d7d7228ccbb69c4a7258f5c653b",
-      "published_elf_sha256": "3d9a2b8f7131e1532d5099e24c086478ab92c19a14e0cd16e7e739c2588bd8a6",
-      "bootloader_and_partition_table": "byte-identical to the published image",
-      "application_as_built_here": "same length; differs by the host OS label and the address shifts that follow it",
-      "application_with_host_label_overridden": "Diagnostic only (--build-property runtime.os=macosx): every byte matched the published application except the embedded ELF SHA-256 in the app descriptor and the image's trailing SHA-256 digest. The ELF itself differs; the cause was not isolated.",
-      "diagnostic_elf_sha256": "faa505aee282d90f884adbdbb5b0d20a5e60dd8077bcb3b5440bb0538ac46ee9",
-      "conclusion": "This host and the macOS arm64 host compile and link the same code and data from the same pinned inputs."
-    }
+    "host_os_label": "The Arduino core embeds the build host OS name (ARDUINO_HOST_OS: \"linux\" here) in the application. Images built from the same source on different host operating systems therefore differ in that string, in the addresses after it, and in the ELF hash."
   },
   "dependencies": {
     "esp32_core": {
@@ -180,13 +152,6 @@
       "package": "esp-x32@2601"
     },
     "esptool": "5.3.1",
-    "arduino_gfx": {
-      "version": "1.6.8",
-      "source_commit": "2685a776495be1f9eaf8c572cf876469bcc56585",
-      "url": "https://codeload.github.com/moononournation/Arduino_GFX/zip/2685a776495be1f9eaf8c572cf876469bcc56585",
-      "archive_sha256": "22f7ade4bd0b5efc65380941418932723360780f1498721d06820b779fdd140b",
-      "fetched_for_this_build": "git fetch of commit 2685a776495be1f9eaf8c572cf876469bcc56585 (the codeload archive was unreachable from this host); content verified by the git commit hash, not by archive_sha256. The repository has no .gitattributes, so the archive holds the same file tree."
-    },
     "melexis": {
       "source_commit": "f6be7ca1d4a55146b705f3d347f84b773b29cc86",
       "local_modifications": "documented include packaging and Arduino I2C adapter"
@@ -228,26 +193,28 @@
         "name": "ctags",
         "version": "5.8-arduino11",
         "built_from": "https://github.com/arduino/ctags tag 5.8-arduino11 (abc8fca7499f44c725122881cd380a88c37abe0e)",
-        "note": "Compiled locally with build-only macro renames for a current host compiler; the release download was unreachable. It only generates prototypes for .ino code, and ThermalCam.ino holds none."
+        "note": "Compiled locally with build-only macro renames for a current host compiler; the release download was unreachable. It only generates prototypes for .ino code, and ThermalCamHead.ino holds none."
       }
     ],
     "package_index": "Official package_esp32_index.json (espressif/arduino-esp32 gh-pages). All archive checksums below match it. The core was installed offline through a trimmed copy listing only esp32:esp32@3.3.12 and the esp-x32, esptool_py and esp32s3-libs tools an ESP32-S3 build uses, with the same URLs, sizes and checksums.",
-    "previous_build_host_archives": "The previous image used the macOS arm64 builds of the Xtensa toolchain and esptool; see git history of this file."
+    "esp32_camera": {
+      "note": "esp32-camera driver and esp_jpeg come precompiled in the esp32s3-libs 3.3.12 package (SDK managed components); no separate library is installed."
+    }
   },
   "components": [
     {
       "role": "bootloader",
-      "build_file": "ThermalCam.ino.bootloader.bin",
+      "build_file": "ThermalCamHead.ino.bootloader.bin",
       "flash_offset": "0x0",
       "bytes": 19968,
-      "sha256": "84bb365666003b051f564d04380d0cf5d9d85c420ddafe9fc863071b49e49bfc"
+      "sha256": "883bb1e4765f12902e56b4bb901d0504df2ea2396bba8d79a7b29ae87d4b3658"
     },
     {
       "role": "partition_table",
-      "build_file": "ThermalCam.ino.partitions.bin",
+      "build_file": "ThermalCamHead.ino.partitions.bin",
       "flash_offset": "0x8000",
       "bytes": 3072,
-      "sha256": "ace02503447d0f470692e65fa76002f2d77a92dc81cd3813d8aa66718d716da9"
+      "sha256": "1d9cca96de0fe07ad7fc0648b9878ddecd9ce565e38b589ad20fea698ed4c80c"
     },
     {
       "role": "boot_app0",
@@ -258,10 +225,10 @@
     },
     {
       "role": "application",
-      "build_file": "ThermalCam.ino.bin",
+      "build_file": "ThermalCamHead.ino.bin",
       "flash_offset": "0x10000",
-      "bytes": 1106208,
-      "sha256": "71a30772fa57320cd8543a8cfef8a5aea671e4f3a9711a4c5a7a0706b7ae1b98"
+      "bytes": 988576,
+      "sha256": "bc1a254e7a1f3430015d12e280dcdffeeab0cbf944169263e9a7e1e804a55d5f"
     }
   ],
   "partitions": [
@@ -288,34 +255,34 @@
       "type": 0,
       "subtype": 16,
       "offset": "0x10000",
-      "bytes": 3145728,
+      "bytes": 3342336,
       "flags": 0
     },
     {
       "label": "app1",
       "type": 0,
       "subtype": 17,
-      "offset": "0x310000",
-      "bytes": 3145728,
+      "offset": "0x340000",
+      "bytes": 3342336,
       "flags": 0,
       "all_ff": true,
-      "sha256": "908b6cfc9aef496dd5ab5c5540d80c6383ed6e92f86044574c996315381bc064"
+      "sha256": "4f2efb4b6a6f31cb1912870b67cc34c0e489a8147b860fd7a84c2bf4064b0e63"
     },
     {
-      "label": "ffat",
+      "label": "spiffs",
       "type": 1,
-      "subtype": 129,
-      "offset": "0x610000",
-      "bytes": 10354688,
+      "subtype": 130,
+      "offset": "0x670000",
+      "bytes": 1572864,
       "flags": 0,
       "all_ff": true,
-      "sha256": "db2ad35d18eb178d03e1a724da0895c149d63ca7136c2c64ef7e9128ecd9ee21"
+      "sha256": "852aad42795f401e21ded6e51fc392da9d94e2f386cacc08327046c319e903fc"
     },
     {
       "label": "coredump",
       "type": 1,
       "subtype": 3,
-      "offset": "0xff0000",
+      "offset": "0x7f0000",
       "bytes": 65536,
       "flags": 0,
       "all_ff": true,
@@ -332,7 +299,7 @@
     "blank_partitions": [
       "nvs",
       "app1",
-      "ffat",
+      "spiffs",
       "coredump"
     ],
     "ota_data_note": "SDK boot_app0.bin is intentional, not blank device NVS.",
@@ -340,22 +307,10 @@
     "binary_privacy_scope": "raw, printable, UTF-16 LE/BE on both alignments with tools/privacy_check.py rules plus local path/identity markers; no local home paths/private identities/emails/tokens/device MACs found; build paths are only the mapped /toolchain prefix; heuristic not proof of absence",
     "entropy_classification": "independent release-review gate; compile/source attestation is not entropy certification"
   },
-  "previous_attested": {
-    "sha256": "5b2251a666fddb0c136540dcd0da6f7dd3d9bc81a2e22928c26c6649b6e78e5d",
-    "bytes": 16777216,
-    "source_commit": "24585557e60ae37f7fe9b0d6b28d6be6492b9aa1",
-    "note": "Previous source-attested image (dark camera display; Linux x86_64 build), preserved privately before replacement. Earlier attested images are in this file's git history; the macOS arm64 image (a2c0a4e43a25186448d71794e88cacdbf392497f3301813ef07890e6a023c930, source 824933755386262ea5472ff1e908bb8ddc78c97e) is the subject of build.cross_check_previous_source."
-  },
-  "legacy": {
-    "replaced_current_sha256": "8cf0bc53a25bc20b4bbe698fb0024ef552ef7dff8ba177f0c8a7b527b96fef49",
-    "bytes": 1155072,
-    "source_correspondence": "unproven; no legacy bitwise reproduction claimed; earlier Git history untouched"
-  },
   "limits": [
-    "No board access, flash, upload, serial or hardware test of this image.",
-    "Default ESP-NOW is unauthenticated and unencrypted broadcast.",
-    "Color pictures from an HT-HC33 camera head arrive over the same unauthenticated broadcast; the JPEG decoder is the SDK's esp_jpeg (TJpgDec) fed by any nearby sender.",
-    "Current binary source mapping does not establish historical binary/source correspondence.",
+    "No board access, flash, upload, serial or hardware test of this image. The HT-HC33 pins come from Heltec's Arduino board definition (ESP_HaLow variants/HT-HC33) and datasheet excerpts; the schematic was not available.",
+    "Thermal frames and color camera pictures are broadcast over unauthenticated, unencrypted ESP-NOW whenever a nearby device says hello like a screen.",
+    "The sensor wiring uses the microSD slot's lines; the slot must stay empty.",
     "Two identical local builds are not a cross-machine or all-future-download reproducibility guarantee; builds on different host operating systems differ in the embedded host OS label.",
     "Manifest is an external source attestation; inherited SDK app-description fields alone are not source provenance.",
     "Required notices and pinned source/rebuild references are retained; no complete binary license-compliance certification or exhaustive SBOM is claimed."
