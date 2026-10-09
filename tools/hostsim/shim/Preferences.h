@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <map>
 class Preferences {
  public:
   bool begin(const char *, bool) { return true; }
@@ -10,4 +11,7 @@ class Preferences {
   uint16_t getUShort(const char *, uint16_t d) { return shot ? shot : d; }
   size_t putUShort(const char *, uint16_t v) { shot = v; return 2; }
   uint16_t shot = 0;
+  float getFloat(const char *k, float d) { auto i = floats.find(k); return i == floats.end() ? d : i->second; }
+  size_t putFloat(const char *k, float v) { floats[k] = v; return 4; }
+  std::map<std::string, float> floats;
 };

@@ -7,18 +7,42 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Each published image: its manifest, flash size, board settings, partition
+# labels, and the partitions that must ship blank (0xFF).
+IMAGES = [
+    {"manifest": "firmware/manifest.json", "mb": 16,
+     "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi",
+     "labels": ["nvs", "otadata", "app0", "app1", "ffat", "coredump"], "gfx": True},
+    {"manifest": "firmware/head-manifest.json", "mb": 8,
+     "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=default,FlashSize=8M,PartitionScheme=default_8MB,PSRAM=opi",
+     "labels": ["nvs", "otadata", "app0", "app1", "spiffs", "coredump"], "gfx": False},
+]
+BLANK = ("nvs", "app1", "ffat", "spiffs", "coredump")
+
 class FirmwareTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.manifest = json.loads((ROOT / "firmware/manifest.json").read_text())
-        cls.data = (ROOT / "firmware" / cls.manifest["file"]).read_bytes()
+        cls.images = []
+        for image in IMAGES:
+            m = json.loads((ROOT / image["manifest"]).read_text())
+            cls.images.append((image, m, (ROOT / "firmware" / m["file"]).read_bytes()))
 
     def test_merged_components_and_partition_privacy(self):
-        m, data = self.manifest, self.data
-        self.assertEqual(len(data), 16 * 1024 * 1024)
-        self.assertEqual(m["build"]["fqbn"], "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi")
+        for image, m, data in self.images:
+            with self.subTest(image=m["file"]):
+                self.check_merged(image, m, data)
+
+    def test_esp_images_and_actual_elf_attestation(self):
+        for image, m, data in self.images:
+            with self.subTest(image=m["file"]):
+                self.check_esp_images(m, data)
+
+    def check_merged(self, image, m, data):
+        self.assertEqual(len(data), image["mb"] * 1024 * 1024)
+        self.assertEqual(m["build"]["fqbn"], image["fqbn"])
         self.assertEqual(m["dependencies"]["esp32_core"]["version"], "3.3.12")
-        self.assertEqual(m["dependencies"]["arduino_gfx"]["version"], "1.6.8")
+        if image["gfx"]:
+            self.assertEqual(m["dependencies"]["arduino_gfx"]["version"], "1.6.8")
         self.assertEqual([int(c["flash_offset"], 16) for c in m["components"]], [0, 0x8000, 0xe000, 0x10000])
         at = 0
         for component in m["components"]:
@@ -41,7 +65,7 @@ class FirmwareTests(unittest.TestCase):
         self.assertEqual(partdata[at + 16:at + 32], hashlib.md5(partdata[:at]).digest())
         self.assertEqual(partdata[at + 32:], b"\xff" * (len(partdata) - at - 32))
         self.assertEqual(len(partitions), len(m["partitions"]))
-        self.assertEqual([p["label"] for p in partitions], ["nvs", "otadata", "app0", "app1", "ffat", "coredump"])
+        self.assertEqual([p["label"] for p in partitions], image["labels"])
         last_end = 0x9000
         for actual, attested in zip(partitions, m["partitions"]):
             for key, value in actual.items():
@@ -50,15 +74,14 @@ class FirmwareTests(unittest.TestCase):
             self.assertGreaterEqual(off, last_end)
             self.assertLessEqual(off + size, len(data))
             last_end = off + size
-            if actual["label"] in ("nvs", "app1", "ffat", "coredump"):
+            if actual["label"] in BLANK:
                 self.assertTrue(attested["all_ff"])
                 self.assertEqual(data[off:off + size], b"\xff" * size)
                 self.assertEqual(hashlib.sha256(data[off:off + size]).hexdigest(), attested["sha256"])
         app = next(c for c in m["components"] if c["role"] == "application")
         self.assertLessEqual(app["bytes"], next(p for p in partitions if p["label"] == "app0")["bytes"])
 
-    def test_esp_images_and_actual_elf_attestation(self):
-        m, data = self.manifest, self.data
+    def check_esp_images(self, m, data):
         for role in ("bootloader", "application"):
             component = next(c for c in m["components"] if c["role"] == role)
             base, size = int(component["flash_offset"], 16), component["bytes"]

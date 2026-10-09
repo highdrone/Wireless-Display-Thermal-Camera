@@ -10,7 +10,9 @@
 //
 // Wireless screen: flash this same firmware to a second board with no thermal
 // sensor. It finds no sensor, becomes a wireless screen, and shows the
-// camera's picture over ESP-NOW (direct radio, no router).
+// camera's picture over ESP-NOW (direct radio, no router). With a thermal +
+// color camera head (ThermalCamHead), it lays the thermal picture over the
+// color picture: swipe up/down to switch views, hold a finger to align.
 //
 // Library (Arduino Library Manager): "GFX Library for Arduino" by Moon On Our
 // Nation. The MLX90640 driver is Melexis' own, included in src/mlx90640.
@@ -32,6 +34,8 @@
 
 #include "config.h"
 #include "bmp_header.h"
+#include "link_protocol.h"
+#include "color_stream.h"
 #include "palettes.h"
 #include "src/mlx90640/mlx90640.h"
 
@@ -91,7 +95,9 @@ static const uint16_t COLOR_RED = 0xF800;
 static const uint16_t COLOR_HOT = 0xFA45;   // (255, 72, 40)
 static const uint16_t COLOR_COLD = 0x565F;  // (80, 200, 255)
 
-enum Gesture : uint8_t { GESTURE_NONE, GESTURE_TAP, GESTURE_SWIPE_RIGHT, GESTURE_SWIPE_LEFT, GESTURE_OTHER };
+enum Gesture : uint8_t {
+  GESTURE_NONE, GESTURE_TAP, GESTURE_SWIPE_RIGHT, GESTURE_SWIPE_LEFT, GESTURE_SWIPE_UP, GESTURE_SWIPE_DOWN, GESTURE_OTHER
+};
 enum Mode : uint8_t { MODE_CAMERA, MODE_VIEWER };
 
 static Arduino_DataBus *bus;
@@ -140,6 +146,9 @@ static volatile bool touchSeen = false;
 static volatile uint8_t gesture = GESTURE_NONE;  // finished touch, with where and when it started
 static volatile int16_t gestureX = 0;
 static volatile uint32_t gestureStartMs = 0;
+static volatile bool touchDown = false;  // a finger is on the screen now, at touchX/touchY
+static volatile int16_t touchX = 0, touchY = 0, touchStartX = 0, touchStartY = 0;
+static volatile uint32_t touchDownMs = 0;
 static volatile bool battKnown = false, battPresent = false, battCharging = false, vbusPresent = false;
 static volatile int8_t battPercent = -1;
 static volatile bool powerOffRequested = false;
@@ -156,35 +165,14 @@ static FrameStats shown = {NAN, NAN, NAN, -1, -1};  // readouts on screen; minId
 static bool markersVisible = false;
 static float rangeLo = NAN, rangeHi = NAN;  // color scale, degrees C
 
-// Wireless screen link (ESP-NOW broadcast). The screen says hello twice a
-// second; the camera streams only while it hears one.
-#define LINK_MAGIC 0x54  // 'T'
-#define LINK_VERSION 1
-#define LINK_CHUNK_PIXELS 112
-#define LINK_CHUNKS ((SENSOR_PIXELS + LINK_CHUNK_PIXELS - 1) / LINK_CHUNK_PIXELS)
-enum : uint8_t { PKT_HELLO = 1, PKT_META = 2, PKT_PIXELS = 3 };
-struct __attribute__((packed)) PktHeader {
-  uint8_t magic, version, type;
-  uint16_t frame;
-};
-struct __attribute__((packed)) PktMeta {  // what the camera shows besides the pixels
-  PktHeader h;
-  uint8_t palette, flags;  // flags: bit 0 = Fahrenheit, bit 1 = markers visible
-  int16_t hotIdx, coldIdx;
-  float centerT, minT, maxT, rangeLo, rangeHi;
-};
-struct __attribute__((packed)) PktPixels {  // temperatures in 1/100 C, INT16_MIN = no reading
-  PktHeader h;
-  uint8_t chunk, count;
-  int16_t centi[LINK_CHUNK_PIXELS];
-};
+// Wireless screen link: see link_protocol.h.
+static_assert(LINK_SENSOR_PIXELS == SENSOR_PIXELS, "link frame size");
 static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static bool linkReady = false;
 static volatile uint32_t lastHelloMs = 0;  // camera: when a screen last said hello
 static bool hadScreen = false;             // camera: a wireless screen has watched since startup
 static uint32_t screenSeenMs = 0;          // camera: when that screen was last listening
 static volatile bool probeReplyDue = false;  // camera: a sleeping screen asked "are you on?"
-#define HELLO_PROBE 1  // PktHeader.frame of a hello from a screen in standby
 // Screen: the newest frame from the camera, filled in by the receive callback.
 static portMUX_TYPE linkLock = portMUX_INITIALIZER_UNLOCKED;
 static PktMeta linkMeta;
@@ -194,6 +182,22 @@ static uint8_t linkCameraMac[6];
 static volatile uint32_t linkCameraHeardMs = 0;
 static uint32_t lastLinkFrameMs = 0;  // screen: when the last picture arrived
 static bool everConnected = false;    // screen: has had a picture since startup
+static bool linkHeadless = false;     // screen: the camera has no display (a color camera head)
+static char headStatus[sizeof(PktStatus::text)] = "";  // screen: a problem the head reported
+static uint32_t headStatusMs = 0;
+static bool wantColor = false;        // screen: ask the head for color pictures
+
+// Views of a color camera head's pictures (screen), and how the thermal
+// picture lines up with the color picture: the color picture's point under
+// the thermal picture's center (alignCu, alignCv, 0..1), the share of the
+// color picture's width the thermal picture covers, and extra flips.
+enum View : uint8_t { VIEW_THERMAL, VIEW_BLEND, VIEW_EDGES, VIEW_COLOR, VIEW_COUNT };
+static const char *const VIEW_NAMES[VIEW_COUNT] = {"Thermal", "Blend", "Edges", "Color"};
+static uint8_t viewMode = VIEW_BLEND;
+static float alignCu = 0.5f, alignCv = 0.5f, alignW = (float)THERMAL_FOV_DEG / COLOR_FOV_DEG;
+static uint8_t alignFlip = 0;  // bit 0: mirror the thermal picture, bit 1: turn it upside down
+static bool aligning = false;
+static bool viewMirror = MIRROR_IMAGE, viewFlip = FLIP_IMAGE;  // thermal orientation in use
 
 // Picture viewer.
 static std::vector<uint16_t> pictures;  // numbers of the IMG_####.bmp files, oldest first
@@ -358,16 +362,25 @@ static void pollTouch() {
       x0 = x;
       y0 = y;
       t0 = millis();
+      touchStartX = x;
+      touchStartY = y;
+      touchDownMs = t0;
     }
     x1 = x;
     y1 = y;
+    touchX = x;
+    touchY = y;
+    touchDown = true;
     touchSeen = true;
   } else if (down) {
     down = false;
+    touchDown = false;
     const int16_t dx = x1 - x0, dy = y1 - y0;
     uint8_t g = GESTURE_OTHER;
     if (abs(dx) >= SWIPE_MIN_PX && abs(dx) > 2 * abs(dy)) {
       g = dx > 0 ? GESTURE_SWIPE_RIGHT : GESTURE_SWIPE_LEFT;
+    } else if (abs(dy) >= SWIPE_MIN_PX && abs(dy) > 2 * abs(dx)) {
+      g = dy > 0 ? GESTURE_SWIPE_DOWN : GESTURE_SWIPE_UP;
     } else if (abs(dx) < TAP_MAX_PX && abs(dy) < TAP_MAX_PX && millis() - t0 < 800) {
       g = GESTURE_TAP;
     }
@@ -448,8 +461,8 @@ static void setupLayout() {
   imgX = (scrW - imgW) / 2;
   imgY = (scrH - BAR_H - imgH) / 2;
 
-  buildAxis(imgW, SENSOR_W, MIRROR_IMAGE, xSrc0, xSrc1, xWeight);
-  buildAxis(imgH, SENSOR_H, FLIP_IMAGE, ySrc0, ySrc1, yWeight);
+  buildAxis(imgW, SENSOR_W, viewMirror, xSrc0, xSrc1, xWeight);
+  buildAxis(imgH, SENSOR_H, viewFlip, ySrc0, ySrc1, yWeight);
 
   // Same mapping as Arduino_Canvas::writePixelPreclipped().
   switch (SCREEN_ROT) {
@@ -776,6 +789,95 @@ static void drawThermalImage(const float *temps, float lo, float hi) {
   }
 }
 
+// ---- Thermal over color (wireless screen with a color camera head) ---------
+
+// Mixes two RGB565 colors; a = weight of fg, 0..32.
+static inline uint16_t blend565(uint16_t fg, uint16_t bg, uint32_t a) {
+  const uint32_t f = (fg | ((uint32_t)fg << 16)) & 0x07E0F81F;
+  const uint32_t b = (bg | ((uint32_t)bg << 16)) & 0x07E0F81F;
+  const uint32_t r = ((f * a + b * (32 - a)) >> 5) & 0x07E0F81F;
+  return (uint16_t)(r | (r >> 16));
+}
+
+// The share of the color picture's height the thermal picture covers.
+static float alignRowShare(const ColorFrame &cf) { return alignW * ((float)cf.w / cf.h) * ((float)imgH / imgW); }
+
+// Which color-picture column / row lies under each column / row of the
+// thermal picture (-1 = outside the color picture).
+static int16_t colorCol[LCD_HEIGHT], colorRow[LCD_HEIGHT];
+
+static void mapColor(const ColorFrame &cf) {
+  const float rowShare = alignRowShare(cf);
+  for (int x = 0; x < imgW; x++) {
+    const int c = (int)floorf((alignCu + ((x + 0.5f) / imgW - 0.5f) * alignW) * cf.w);
+    colorCol[x] = (c >= 0 && c < cf.w) ? c : -1;
+  }
+  for (int y = 0; y < imgH; y++) {
+    const int r = (int)floorf((alignCv + ((y + 0.5f) / imgH - 0.5f) * rowShare) * cf.h);
+    colorRow[y] = (r >= 0 && r < cf.h) ? r : -1;
+  }
+}
+
+// Like drawThermalImage, combined with the color picture: Blend mixes the
+// two, Edges draws the color picture's outlines on the thermal picture,
+// Color shows the color picture alone.
+static void drawFusedImage(const float *temps, float lo, float hi, const ColorFrame &cf, uint8_t view) {
+  static int16_t level[SENSOR_PIXELS];
+  const float k = 4080.0f / (hi - lo);
+  for (int i = 0; i < SENSOR_PIXELS; i++) {
+    const float v = (temps[i] - lo) * k;
+    level[i] = (v > 0) ? (v < 4080 ? (int16_t)v : 4080) : 0;
+  }
+  mapColor(cf);
+  const uint32_t blendA = FUSION_BLEND_PERCENT * 32 / 100;
+  const uint32_t edgeK = FUSION_EDGE_PERCENT * 32 / 100;
+
+  const uint16_t *lut = paletteLut[paletteIdx];
+  uint16_t *fb = gfx->getFramebuffer();
+  int32_t rowStart = fbBase + imgX * fbDx + imgY * fbDy;
+  int32_t rowLevels[SENSOR_W];
+  for (int y = 0; y < imgH; y++, rowStart += fbDy) {
+    const int16_t *r0 = &level[ySrc0[y] * SENSOR_W];
+    const int16_t *r1 = &level[ySrc1[y] * SENSOR_W];
+    const int32_t wy = yWeight[y];
+    for (int c = 0; c < SENSOR_W; c++) rowLevels[c] = (r0[c] * (256 - wy) + r1[c] * wy) >> 8;
+    const int cr = colorRow[y];
+    const uint16_t *crgb = cr >= 0 ? cf.rgb + cr * cf.w : nullptr;
+    const uint8_t *cedge = cr >= 0 ? cf.edges + cr * cf.w : nullptr;
+
+    uint16_t *p = fb + rowStart;
+    for (int x = 0; x < imgW; x++, p += fbDx) {
+      const int32_t wx = xWeight[x];
+      const int32_t v = (rowLevels[xSrc0[x]] * (256 - wx) + rowLevels[xSrc1[x]] * wx) >> 8;
+      uint16_t out = lut[v >> 4];
+      const int cc = colorCol[x];
+      if (crgb && cc >= 0) {
+        if (view == VIEW_BLEND) {
+          out = blend565(out, crgb[cc], blendA);
+        } else if (view == VIEW_EDGES) {
+          const uint32_t e = cedge[cc];
+          if (e) out = blend565(COLOR_WHITE, out, (e * edgeK) >> 8);
+        } else {
+          out = crgb[cc];
+        }
+      }
+      *p = out;
+    }
+  }
+}
+
+// The thermal picture's orientation: the settings, plus the alignment's
+// flips while a color camera head is connected.
+static void updateOrientation() {
+  const uint8_t flip = (!isCamera && linkHeadless) ? alignFlip : 0;
+  const bool m = MIRROR_IMAGE ^ (bool)(flip & 1), f = FLIP_IMAGE ^ (bool)(flip & 2);
+  if (m == viewMirror && f == viewFlip) return;
+  viewMirror = m;
+  viewFlip = f;
+  buildAxis(imgW, SENSOR_W, viewMirror, xSrc0, xSrc1, xWeight);
+  buildAxis(imgH, SENSOR_H, viewFlip, ySrc0, ySrc1, yWeight);
+}
+
 // ============================================================================
 //  Wireless screen link
 // ============================================================================
@@ -796,12 +898,27 @@ static void onLinkReceive(const esp_now_recv_info_t *info, const uint8_t *data, 
     }
     return;
   }
-  if (type != PKT_META && type != PKT_PIXELS) return;
+  if (type != PKT_META && type != PKT_PIXELS && type != PKT_JPEG && type != PKT_STATUS) return;
   // Stay with one camera; switch only after it has been quiet for 2 s.
   const uint32_t now = millis();
   if (linkCameraHeardMs && now - linkCameraHeardMs < 2000 && memcmp(info->src_addr, linkCameraMac, 6) != 0) return;
   memcpy(linkCameraMac, info->src_addr, 6);
   linkCameraHeardMs = now;
+
+  if (type == PKT_JPEG) {
+    colorRx(data, len);
+    return;
+  }
+  if (type == PKT_STATUS) {
+    const int n = min(len - (int)offsetof(PktStatus, text), (int)sizeof(headStatus) - 1);
+    if (n <= 0) return;
+    portENTER_CRITICAL(&linkLock);
+    memcpy(headStatus, data + offsetof(PktStatus, text), n);
+    headStatus[n] = 0;
+    headStatusMs = now ? now : 1;
+    portEXIT_CRITICAL(&linkLock);
+    return;
+  }
 
   portENTER_CRITICAL(&linkLock);
   if (type == PKT_META && len == (int)sizeof(PktMeta)) {
@@ -852,7 +969,7 @@ static void sendFrame() {
   PktMeta m = {};
   m.h = {LINK_MAGIC, LINK_VERSION, PKT_META, frameNo};
   m.palette = paletteIdx;
-  m.flags = (fahrenheit ? 1 : 0) | (markersVisible ? 2 : 0);
+  m.flags = (fahrenheit ? META_FAHRENHEIT : 0) | (markersVisible ? META_MARKERS : 0);
   m.hotIdx = shown.maxIdx;
   m.coldIdx = shown.minIdx;
   m.centerT = shown.centerT;
@@ -879,7 +996,8 @@ static void sendFrame() {
 
 // Screen: tell cameras nearby that someone is watching.
 static void sendHello(bool probe = false) {
-  const PktHeader h = {LINK_MAGIC, LINK_VERSION, PKT_HELLO, (uint16_t)(probe ? HELLO_PROBE : 0)};
+  const PktHeader h = {LINK_MAGIC, LINK_VERSION, PKT_HELLO,
+                       (uint16_t)(probe ? HELLO_PROBE : wantColor ? HELLO_WANT_COLOR : 0)};
   linkSend(&h, sizeof(h));
 }
 
@@ -898,9 +1016,12 @@ static bool takeLinkFrame() {
   if (!ready || m.h.magic != LINK_MAGIC) return false;
 
   for (int i = 0; i < SENSOR_PIXELS; i++) smoothT[i] = px[i] == INT16_MIN ? NAN : px[i] / 100.0f;
-  paletteIdx = m.palette % PALETTE_COUNT;
-  fahrenheit = m.flags & 1;
-  markersVisible = m.flags & 2;
+  linkHeadless = m.flags & META_HEADLESS;
+  if (!linkHeadless) {  // a camera with its own display decides these
+    paletteIdx = m.palette % PALETTE_COUNT;
+    fahrenheit = m.flags & META_FAHRENHEIT;
+  }
+  markersVisible = m.flags & META_MARKERS;
   shown.maxIdx = (m.hotIdx >= 0 && m.hotIdx < SENSOR_PIXELS) ? m.hotIdx : -1;
   shown.minIdx = (m.coldIdx >= 0 && m.coldIdx < SENSOR_PIXELS) ? m.coldIdx : -1;
   shown.centerT = m.centerT;
@@ -954,8 +1075,8 @@ static void drawCrosshair(int16_t cx, int16_t cy) {
 static void drawSpot(int idx, uint16_t color) {
   if (idx < 0) return;
   int col = idx % SENSOR_W, row = idx / SENSOR_W;
-  if (MIRROR_IMAGE) col = SENSOR_W - 1 - col;
-  if (FLIP_IMAGE) row = SENSOR_H - 1 - row;
+  if (viewMirror) col = SENSOR_W - 1 - col;
+  if (viewFlip) row = SENSOR_H - 1 - row;
   const int16_t cx = imgX + col * imgScale + imgScale / 2;
   const int16_t cy = imgY + row * imgScale + imgScale / 2;
   gfx->drawCircle(cx, cy, 10, COLOR_BLACK);
@@ -1516,7 +1637,97 @@ static void manageIdle() {
 //  Buttons and touch
 // ============================================================================
 
+// ---- Views and alignment for a color camera head ---------------------------
+
+static const char *const FLIP_NAMES[4] = {"Flip: none", "Flip: mirror", "Flip: upside down", "Flip: both"};
+
+static void loadAlignment() {
+  alignCu = constrain(prefs.getFloat("alignU", 0.5f), 0.0f, 1.0f);
+  alignCv = constrain(prefs.getFloat("alignV", 0.5f), 0.0f, 1.0f);
+  alignW = constrain(prefs.getFloat("alignW", (float)THERMAL_FOV_DEG / COLOR_FOV_DEG), 0.15f, 1.5f);
+  alignFlip = prefs.getUChar("alignFlip", 0) & 3;
+}
+
+static void saveAlignment() {
+  prefs.putFloat("alignU", alignCu);
+  prefs.putFloat("alignV", alignCv);
+  prefs.putFloat("alignW", alignW);
+  prefs.putUChar("alignFlip", alignFlip);
+}
+
+static void endAlign() {
+  if (!aligning) return;
+  aligning = false;
+  saveAlignment();
+  showToast("Alignment saved");
+}
+
+// Holding a finger still on the live picture for 1.2 s starts aligning; then
+// the color picture follows the finger.
+static void manageAlign(const ColorFrame *cf) {
+  static uint32_t dragSession = 0;
+  static int16_t lastX = 0, lastY = 0;
+  if (!aligning) {
+    if (isCamera || !cf || mode != MODE_CAMERA || screenAsleep || !touchDown) return;
+    if (millis() - touchDownMs < 1200 || abs(touchX - touchStartX) > 20 || abs(touchY - touchStartY) > 20) return;
+    aligning = true;
+    dragSession = touchDownMs;
+    lastX = touchX;
+    lastY = touchY;
+    showToast("Align");
+    return;
+  }
+  if (!cf || mode != MODE_CAMERA) {  // the color picture went away
+    endAlign();
+    return;
+  }
+  if (!touchDown) return;
+  const int16_t x = touchX, y = touchY;
+  if (dragSession != touchDownMs) {  // a new touch: start dragging from here
+    dragSession = touchDownMs;
+    lastX = x;
+    lastY = y;
+    return;
+  }
+  const int dx = x - lastX, dy = y - lastY;
+  if (!dx && !dy) return;
+  lastX = x;
+  lastY = y;
+  alignCu = constrain(alignCu - dx * alignW / imgW, 0.0f, 1.0f);
+  alignCv = constrain(alignCv - dy * alignRowShare(*cf) / imgH, 0.0f, 1.0f);
+}
+
+static void drawAlignHint() {
+  static const char *const lines[3] = {"ALIGN: drag to line up", "BOOT zoom, hold: out", "PWR flip, tap: done"};
+  const int16_t w = 22 * 12 + 24, h = 3 * 22 + 14;
+  const int16_t x = imgX + (imgW - w) / 2, y = imgY + imgH - h - 8;
+  gfx->fillRect(x, y, w, h, COLOR_BLACK);
+  gfx->drawRect(x, y, w, h, COLOR_YELLOW);
+  gfx->setTextSize(2);
+  gfx->setTextColor(COLOR_YELLOW);
+  for (int i = 0; i < 3; i++) {
+    gfx->setCursor(x + 12, y + 8 + i * 22);
+    gfx->print(lines[i]);
+  }
+}
+
+// Swipe up / down on a wireless screen: Thermal, Blend, Edges, Color.
+static void cycleView(int dir) {
+  if (isCamera || mode != MODE_CAMERA) return;
+  if (!linkHeadless) {
+    showToast("No color camera");
+    return;
+  }
+  viewMode = (viewMode + VIEW_COUNT + dir) % VIEW_COUNT;
+  prefs.putUChar("view", viewMode);
+  showToast(VIEW_NAMES[viewMode]);
+}
+
 static void handleGesture(uint8_t g, int16_t x) {
+  if (aligning) {  // only a tap counts: it finishes aligning
+    if (g == GESTURE_TAP) endAlign();
+    return;
+  }
   switch (g) {
     case GESTURE_SWIPE_RIGHT:
       if (mode == MODE_CAMERA) enterViewer();
@@ -1526,6 +1737,12 @@ static void handleGesture(uint8_t g, int16_t x) {
       break;
     case GESTURE_TAP:
       if (mode == MODE_VIEWER) stepPicture(x < scrW / 2 ? -1 : 1);
+      break;
+    case GESTURE_SWIPE_UP:
+      cycleView(1);
+      break;
+    case GESTURE_SWIPE_DOWN:
+      cycleView(-1);
       break;
   }
 }
@@ -1546,7 +1763,19 @@ static void pollButton() {
     wasDown = down;
     return;
   }
-  if (!isCamera && mode == MODE_CAMERA) {  // palette and units follow the camera
+  if (aligning) {  // BOOT: zoom the color picture in; hold: zoom out
+    if (down && !holdHandled && now - downSince >= 700) {
+      holdHandled = true;
+      alignW = min(alignW / 0.92f, 1.5f);
+      showToast("Zoom out");
+    } else if (!down && wasDown && !holdHandled && now - downSince >= 30) {
+      alignW = max(alignW * 0.92f, 0.15f);
+      showToast("Zoom in");
+    }
+    wasDown = down;
+    return;
+  }
+  if (!isCamera && mode == MODE_CAMERA && !linkHeadless) {  // palette and units follow the camera
     if (down && !wasDown) showToast("Set on the camera");
     wasDown = down;
     return;
@@ -1587,6 +1816,8 @@ void setup() {
   prefs.begin("thermalcam", false);
   paletteIdx = prefs.getUChar("palette", 0) % PALETTE_COUNT;
   fahrenheit = prefs.getBool("fahrenheit", START_IN_FAHRENHEIT);
+  viewMode = prefs.getUChar("view", VIEW_BLEND) % VIEW_COUNT;
+  loadAlignment();
 
   initPower();
   pollBattery();
@@ -1599,6 +1830,7 @@ void setup() {
     isCamera = startSensor();
     hadScreen = isCamera && wake == WAKE_AS_CAMERA;  // still waiting for its screen
   }
+  if (!isCamera) colorBegin();  // ready for a color camera head
   initLink();
   xTaskCreatePinnedToCore(boardTask, "board", 16384, nullptr, 2, &boardTaskHandle, 0);
   lastActivityMs = millis();  // count idle time from when the camera is running
@@ -1631,7 +1863,10 @@ void loop() {
     const bool woke = screenAsleep;
     noteActivity();
     if (!woke) {
-      if (mode == MODE_VIEWER) {
+      if (aligning) {
+        alignFlip = (alignFlip + 1) & 3;
+        showToast(FLIP_NAMES[alignFlip]);
+      } else if (mode == MODE_VIEWER) {
         exitViewer();
       } else {
         captureRequested = true;
@@ -1661,6 +1896,11 @@ void loop() {
   wasLinked = linked;
   manageIdle();
 
+  // A color camera head's newest color picture, while the live view is up.
+  const ColorFrame *cf = (!isCamera && linkHeadless && mode == MODE_CAMERA) ? colorCurrent() : nullptr;
+  if (cf && millis() - cf->ms > 2000) cf = nullptr;  // stale: show thermal only
+  manageAlign(cf);
+
   // ---- Frames keep flowing in every mode, so the smoothing stays current ----
   bool fresh;
   if (isCamera) {
@@ -1672,6 +1912,7 @@ void loop() {
     }
   } else {
     static uint32_t helloAt = 0;
+    wantColor = mode == MODE_CAMERA && !screenAsleep && (aligning || viewMode != VIEW_THERMAL);
     if (linkReady && millis() - helloAt >= 500) {
       helloAt = millis();
       sendHello();
@@ -1703,11 +1944,19 @@ void loop() {
     if (!waitingShown || millis() - waitDrawnAt >= 1000) {  // once a second for the countdown
       waitingShown = true;
       waitDrawnAt = millis();
-      drawMessage("Wireless screen",
-                  String(!linkReady       ? "Radio failed to start."
-                         : everConnected ? "Lost the camera's signal.\nWaiting for it to come back."
-                                         : "Waiting for the thermal camera.\nTurn it on nearby.") +
-                      "\n\n" + sensorlessNote);
+      char problem[sizeof(headStatus)] = "";
+      portENTER_CRITICAL(&linkLock);
+      if (headStatusMs && millis() - headStatusMs < 5000) memcpy(problem, headStatus, sizeof(problem));
+      portEXIT_CRITICAL(&linkLock);
+      if (problem[0]) {
+        drawMessage("Camera head", String(problem));
+      } else {
+        drawMessage("Wireless screen",
+                    String(!linkReady       ? "Radio failed to start."
+                           : everConnected ? "Lost the camera's signal.\nWaiting for it to come back."
+                                           : "Waiting for the thermal camera.\nTurn it on nearby.") +
+                        "\n\n" + sensorlessNote);
+      }
       if (idleWarnLeftMs) drawIdleWarning(idleWarnLeftMs, WARNING_BELOW_TEXT);
       gfx->flush();
       haveFrame = false;
@@ -1731,8 +1980,15 @@ void loop() {
     screenDirty = false;
   }
   waitingShown = false;
-  drawThermalImage(smoothT, rangeLo, rangeHi);
+  updateOrientation();
+  const uint8_t view = aligning ? (uint8_t)VIEW_BLEND : viewMode;
+  if (cf && view != VIEW_THERMAL) {
+    drawFusedImage(smoothT, rangeLo, rangeHi, *cf, view);
+  } else {
+    drawThermalImage(smoothT, rangeLo, rangeHi);
+  }
   drawOverlays(captureRequested);
+  if (aligning && !captureRequested) drawAlignHint();
   gfx->flush();
   if (captureRequested) {
     captureRequested = false;

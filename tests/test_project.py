@@ -51,7 +51,22 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(set(result.stdout.splitlines()), set(names))
 
     def test_source_attested_manifest(self):
-        manifest = json.loads((ROOT / "firmware/manifest.json").read_text())
+        for name, sketch in (("firmware/manifest.json", "ThermalCam"), ("firmware/head-manifest.json", "ThermalCamHead")):
+            with self.subTest(manifest=name):
+                self.check_manifest(json.loads((ROOT / name).read_text()), sketch)
+
+    def test_shared_link_protocol(self):
+        # The screen and the camera head must speak the same packets.
+        self.assertEqual((ROOT / "ThermalCam/link_protocol.h").read_bytes(), (ROOT / "ThermalCamHead/link_protocol.h").read_bytes())
+        for name in ("MLX90640_API.c", "MLX90640_API.h", "MLX90640_I2C_Driver.cpp", "MLX90640_I2C_Driver.h", "mlx90640.h", "LICENSE", "README.md"):
+            self.assertEqual((ROOT / "ThermalCam/src/mlx90640" / name).read_bytes(), (ROOT / "ThermalCamHead/src/mlx90640" / name).read_bytes(), name)
+
+    def test_head_defaults(self):
+        config = (ROOT / "ThermalCamHead/config.h").read_text()
+        for name, value in {"THERMAL_SDA": "11", "THERMAL_SCL": "10", "THERMAL_ALT_SDA": "16", "THERMAL_ALT_SCL": "15", "WIRELESS_CHANNEL": "1", "LOG_SENSOR_SERIAL": "false"}.items():
+            self.assertRegex(config, rf"(?m)^#define {name} {value}(?:\s|$)")
+
+    def check_manifest(self, manifest, sketch):
         artifact = ROOT / "firmware" / manifest["file"]
         import hashlib
         self.assertEqual(hashlib.sha256(artifact.read_bytes()).hexdigest(), manifest["sha256"])
@@ -68,10 +83,11 @@ class ProjectTests(unittest.TestCase):
             self.assertEqual(len(data), entry["bytes"])
             git_blob = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
             self.assertEqual(git_blob, entry["git_blob"])
-        actual = subprocess.check_output(["git", "ls-files", "ThermalCam"], cwd=ROOT, text=True).splitlines()
+        self.assertEqual(manifest["source_tree"]["path"], sketch)
+        actual = subprocess.check_output(["git", "ls-files", sketch], cwd=ROOT, text=True).splitlines()
         self.assertEqual(source_paths, set(actual))
         # Works with depth-one CI: it does not need the preceding commit object.
-        tree = subprocess.check_output(["git", "rev-parse", "HEAD:ThermalCam"], cwd=ROOT, text=True).strip()
+        tree = subprocess.check_output(["git", "rev-parse", f"HEAD:{sketch}"], cwd=ROOT, text=True).strip()
         self.assertEqual(tree, manifest["source_tree"]["git_tree"])
 
     def test_exact_upstream_notices(self):

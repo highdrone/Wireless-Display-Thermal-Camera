@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <algorithm>
+#include <utility>
 #include <string>
 #include <strings.h>
 #include <dirent.h>
@@ -53,3 +54,9 @@ static HostESP ESP;
 inline void attachInterrupt(int, void (*)(void), int) {}
 typedef void *TaskHandle_t;
 inline void *ps_malloc(size_t n) { return malloc(n); }
+inline bool psramFound() { return true; }
+template <typename T, typename L, typename H> inline T constrain(T v, L lo, H hi) { return v < lo ? (T)lo : v > hi ? (T)hi : v; }
+#define pdTRUE 1
+#define portMAX_DELAY 0xFFFFFFFF
+inline void xTaskNotifyGive(void *) {}
+inline uint32_t ulTaskNotifyTake(int, uint32_t) { return 1; }

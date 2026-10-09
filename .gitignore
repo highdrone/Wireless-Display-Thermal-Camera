@@ -27,8 +27,9 @@
 *.bundle
 *.csv
 *.bmp
-# Explicit source-attested release image only; replacements need a new manifest.
+# Explicit source-attested release images only; replacements need a new manifest.
 !/firmware/ThermalCam-full-flash-at-0x0.bin
+!/firmware/ThermalCamHead-HT-HC33-full-flash-at-0x0.bin
 # Local credentials/configuration and machine-specific editor state
 .env
 .env.*

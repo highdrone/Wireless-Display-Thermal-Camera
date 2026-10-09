@@ -79,6 +79,20 @@
 #define STANDBY_CHECK_SECONDS 5
 #define STANDBY_MINUTES 30
 
+// ---- Thermal + color camera head -------------------------------------------
+// With a color camera head (ThermalCamHead on a Heltec HT-HC33), the wireless
+// screen lays the thermal picture over the color picture. Swipe up or down to
+// switch views: Thermal, Blend, Edges (color outlines on thermal), Color.
+// How strongly Blend's thermal colors cover the color picture, 0-100.
+#define FUSION_BLEND_PERCENT 55
+// How bright Edges draws the color picture's outlines, 0-100.
+#define FUSION_EDGE_PERCENT 75
+// Starting alignment: the thermal sensor's and the color camera's horizontal
+// fields of view, in degrees (MLX90640-D55 = 55, -D110 = 110). Fine-tune it
+// on the screen: hold a finger on the picture, then drag.
+#define THERMAL_FOV_DEG 55
+#define COLOR_FOV_DEG 120
+
 // ---- Auto-off --------------------------------------------------------------
 // Turn off after this many seconds without a button press or screen tap
 // (0 = never). On battery the board powers off; on USB power only the screen
