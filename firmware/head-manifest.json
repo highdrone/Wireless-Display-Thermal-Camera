@@ -8,10 +8,10 @@
   "sensor": "MLX90640 (soldered to GPIO11/GPIO10 or GPIO16/GPIO15) and the on-board OV3660 color camera",
   "role": "Headless thermal + color camera head; the wireless screen is ThermalCam (firmware/manifest.json)",
   "provenance": "compiled from attested source; offline verified; no hardware test",
-  "source_commit": "259bf17c67609b251c08e4be7969831bfb50d698",
+  "source_commit": "023e52915fc78ef41d77f36a34998afe36a72b98",
   "source_tree": {
     "path": "ThermalCamHead",
-    "git_tree": "f1e424557e0aa7063a3063a3a020b0e50315163b",
+    "git_tree": "d7adc43cc62939d44c8124b82e5ebb5ca559ec98",
     "files": [
       {
         "path": "ThermalCamHead/ThermalCamHead.cpp",
@@ -27,9 +27,9 @@
       },
       {
         "path": "ThermalCamHead/config.h",
-        "git_blob": "8e3da9d8857f12d611520183e6841b10432042a8",
-        "bytes": 2808,
-        "sha256": "95fbe8af3fc134af30b2fe181e665405acffdec19b9c9b201a4866aa46429cfc"
+        "git_blob": "63329c35214113e32c8572589013519c326314fa",
+        "bytes": 3007,
+        "sha256": "a028df8593e0637629c6b28d771d0f8ae28758f5499c6adc4f71575ad6de9d79"
       },
       {
         "path": "ThermalCamHead/link_protocol.h",
@@ -82,7 +82,7 @@
     ]
   },
   "build": {
-    "date": "2026-10-09",
+    "date": "2026-10-17",
     "host": "Linux x86_64",
     "arduino_cli": "1.5.1",
     "fqbn": "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=default,FlashSize=8M,PartitionScheme=default_8MB,PSRAM=opi",
@@ -129,7 +129,12 @@
       "ldflags": "versionString=1.5.1, commit=01f3d4f, date=2026-06-05T09:39:33Z",
       "note": "Compiled from the tagged source because the release download was unreachable from the build host. An official Arduino CLI 1.3.1 binary produced byte-identical ELF, application and merged images from the same source."
     },
-    "host_os_label": "The Arduino core embeds the build host OS name (ARDUINO_HOST_OS: \"linux\" here) in the application. Images built from the same source on different host operating systems therefore differ in that string, in the addresses after it, and in the ELF hash."
+    "host_os_label": "The Arduino core embeds the build host OS name (ARDUINO_HOST_OS: \"linux\" here) in the application. Images built from the same source on different host operating systems therefore differ in that string, in the addresses after it, and in the ELF hash.",
+    "previous_source_same_image": {
+      "source_commit": "259bf17c67609b251c08e4be7969831bfb50d698",
+      "git_tree": "f1e424557e0aa7063a3063a3a020b0e50315163b",
+      "note": "The only change since that source is the wiring comments in config.h. Rebuilt twice from the new source, the ELF, application and merged image are byte-identical to the ones built from 259bf17."
+    }
   },
   "dependencies": {
     "esp32_core": {
@@ -308,7 +313,7 @@
     "entropy_classification": "independent release-review gate; compile/source attestation is not entropy certification"
   },
   "limits": [
-    "No board access, flash, upload, serial or hardware test of this image. The HT-HC33 pins come from Heltec's Arduino board definition (ESP_HaLow variants/HT-HC33) and datasheet excerpts; the schematic was not available.",
+    "No board access, flash, upload, serial or hardware test of this image. The HT-HC33 pins come from Heltec's Arduino board definition (ESP_HaLow variants/HT-HC33) and datasheet excerpts; the schematic was not available. The pad labels printed on a V1 board match them (# TF_Card on 10, 11, 15 and 16; * Camera on the camera pins).",
     "Thermal frames and color camera pictures are broadcast over unauthenticated, unencrypted ESP-NOW whenever a nearby device says hello like a screen.",
     "The sensor wiring uses the microSD slot's lines; the slot must stay empty.",
     "Two identical local builds are not a cross-machine or all-future-download reproducibility guarantee; builds on different host operating systems differ in the embedded host OS label.",

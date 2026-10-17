@@ -52,8 +52,10 @@ it the same way.
 
 - SHA-256: `99dd5ad72035dbb59df08124b6c138360ea1afbb47eb6a780fba377545340bc8`
 - Length: **8,388,608 bytes**.
-- Source commit: `259bf17c67609b251c08e4be7969831bfb50d698`;
-  `ThermalCamHead/` source-tree hash: `f1e424557e0aa7063a3063a3a020b0e50315163b`.
+- Source commit: `023e52915fc78ef41d77f36a34998afe36a72b98`;
+  `ThermalCamHead/` source-tree hash: `d7adc43cc62939d44c8124b82e5ebb5ca559ec98`.
+  (Only the wiring comments changed since `259bf17`; rebuilt from either
+  source, the image is byte-identical.)
 - Core **3.3.12** (its precompiled esp32-camera and esp_jpeg), OPI PSRAM, 8 MB
   flash, default 8 MB partition scheme (two 3.2 MB app slots, 1.5 MB SPIFFS),
   USB serial through the board's CP2102 (no CDC on boot).
@@ -67,7 +69,7 @@ It was verified the same way as the screen image (every range against its
 build input, everything else `0xFF`, blank NVS, second app, SPIFFS and coredump),
 and two builds in new directories with new caches were byte-identical. Its
 pins come from Heltec's Arduino board definition and datasheet excerpts; it has
-not run on an HT-HC33.
+not run on an HT-HC33. The pad labels printed on a V1 board match those pins.
 
 Verify offline from the repository root:
 

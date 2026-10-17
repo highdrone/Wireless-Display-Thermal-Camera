@@ -115,18 +115,22 @@ A [Heltec HT-HC33](https://heltec.org/) (an ESP32-S3 board with an OV3660 color 
 
 ### Wiring the sensor to the HT-HC33
 
-| Sensor board | HT-HC33 |
-| --- | --- |
-| VCC | **3V3** (J2 pin 1) |
-| GND | **GND** (J2 pin 2) |
-| SDA | **GPIO11** (J1, labeled `SD_MOSI` on Heltec's pin map) |
-| SCL | **GPIO10** (J1, labeled `SD_CS`) |
+The HT-HC33 prints a label next to every pad, on the side with the microSD slot. Solder the sensor's four wires to these pads:
 
-- These are the microSD slot's lines, so **leave the microSD slot empty**.
-- If GPIO11/10 are awkward to reach, use **GPIO16** (`SD_MISO`) for SDA and **GPIO15** (`SD_CLK`) for SCL instead.
+![The four pads on the HT-HC33 for the sensor](docs/ht-hc33-wiring.svg)
+
+| Sensor board | HT-HC33 pad (printed label) | Where it is |
+| --- | --- | --- |
+| VCC | **3V3** | End of the row that starts 46, 45, RX, TX: the square pad |
+| GND | **GND** | Next to 3V3 |
+| SCL | **10** | First pad of the row that ends RST, GND, 5V, next to the microSD slot |
+| SDA | **11** | Next to 10 |
+
+- The board marks 10, 11, 15 and 16 with `#` (TF_Card): they are the microSD slot's lines, so **leave the microSD slot empty**.
+- If 10 and 11 are awkward to reach, use **16** for SDA and **15** for SCL instead.
   - The head tries both pairs, either way round, so it also finds the sensor with SDA and SCL swapped.
-  - Leave GPIO0 (the USER key), GPIO41 and the camera pins alone.
-- Check each pin on the board's silkscreen and Heltec's pin map before soldering. These pins come from Heltec's Arduino board definition and the datasheet; the schematic wasn't available.
+  - Leave the pads marked `*` (Camera), **0** (the USER key), **19** (RGB LED) and **1** (ADC) alone.
+- Use **3V3**, not 5V.
 - Mount the sensor right next to the camera lens and point it the same way. The closer they are, the better the two pictures line up at every distance.
 
 ### Flashing

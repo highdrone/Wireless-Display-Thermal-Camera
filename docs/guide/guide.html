@@ -542,42 +542,41 @@
 <section class="page">
   <div class="kicker"><span class="num">09</span>Color camera head</div>
   <h2>Add color with a Heltec HT-HC33.</h2>
-  <p class="lede">Solder the thermal sensor to a <b>Heltec HT-HC33</b> camera board instead, and it becomes a small <b>camera head with no screen</b>. It sends the thermal picture and a color picture to the AMOLED board, which lays one over the other.</p>
+  <p class="lede">Solder the thermal sensor to a <b>Heltec HT-HC33</b> camera board and it becomes a <b>camera head with no screen</b>. The AMOLED board lays its thermal picture over its color picture.</p>
   <div class="rule"></div>
+
+  <img src="../ht-hc33-wiring.svg" alt="The four pads for the sensor on the HT-HC33" style="display:block; width: 4.7in; margin: -12px auto 4px;">
 
   <div class="grid2" style="align-items: start;">
     <div class="card">
-      <h3>Wire the sensor</h3>
+      <h3>Solder to these pads</h3>
       <table class="kv">
-        <tr><th>Sensor board</th><th>HT-HC33</th></tr>
-        <tr><td class="k">VCC</td><td><b>3V3</b> · J2 pin 1</td></tr>
-        <tr><td class="k">GND</td><td><b>GND</b> · J2 pin 2</td></tr>
-        <tr><td class="k">SDA</td><td><b>GPIO11</b> · J1 “SD_MOSI”</td></tr>
-        <tr><td class="k">SCL</td><td><b>GPIO10</b> · J1 “SD_CS”</td></tr>
+        <tr><td class="k">VCC</td><td><b>3V3</b> · the square pad</td></tr>
+        <tr><td class="k">GND</td><td><b>GND</b> · next to 3V3</td></tr>
+        <tr><td class="k">SCL</td><td><b>10</b> · next to the microSD slot</td></tr>
+        <tr><td class="k">SDA</td><td><b>11</b> · next to 10</td></tr>
       </table>
-      <p class="small" style="margin: 10px 0 0;">Or use <b>GPIO16</b> (“SD_MISO”) for SDA and <b>GPIO15</b> (“SD_CLK”) for SCL. The head tries both pairs, either way round. Check each pin on the board before soldering.</p>
+      <p class="small" style="margin: 8px 0 0;">Or use <b>16</b> for SDA and <b>15</b> for SCL. The head tries both pairs, either way round.</p>
     </div>
     <div>
-      <div class="tip" style="margin-bottom: 12px;"><b>Leave the microSD slot empty.</b> These pins are the slot's lines; the head uses them for the sensor.</div>
-      <div class="tip" style="margin-bottom: 12px;"><b>Mount the sensor next to the lens.</b> Point both the same way, as close together as you can, so the two pictures line up at every distance.</div>
-      <div class="tip"><b>Don't use</b> GPIO0 (the USER key), GPIO41 or the camera's pins.</div>
+      <div class="tip" style="margin-bottom: 10px;"><b>Leave the microSD slot empty.</b> The pads marked <b>#</b> (TF_Card) are the slot's lines; the head uses them for the sensor.</div>
+      <div class="tip"><b>Mount the sensor next to the lens</b>, pointing the same way. Use 3V3, not 5V. Leave the <b>*</b> (Camera) pads, 0 and 19 alone.</div>
     </div>
   </div>
 
-  <div class="kicker" style="margin-top: 24px;">Flash both boards</div>
+  <div class="kicker" style="margin-top: 16px;">Flash both boards</div>
   <div class="grid2" style="align-items: start;">
     <ol class="steps">
-      <li><b>The HT-HC33</b>Program <span class="mono">ThermalCamHead-HT-HC33-full-flash-at-0x0.bin</span> at <span class="mono"><b>0x0</b></span> with esptool-js, as on page 14. If it won't connect, hold <span class="key">USER</span> while pressing <span class="key">RST</span>.</li>
-      <li><b>The AMOLED screen</b>Program the current <span class="mono">ThermalCam-full-flash-at-0x0.bin</span>. Older screen firmware ignores the color pictures.</li>
-      <li><b>Turn both on</b>The screen shows <i>Waiting for the thermal camera</i> until it hears the head, then the live picture.</li>
+      <li><b>The HT-HC33</b>Program <span class="mono">ThermalCamHead-HT-HC33-…-0x0.bin</span> at <span class="mono"><b>0x0</b></span> (page 14). Won't connect? Hold <span class="key">USER</span>, press <span class="key">RST</span>.</li>
+      <li><b>The AMOLED screen</b>Program the current <span class="mono">ThermalCam-…-0x0.bin</span> (older screen firmware ignores color). Then turn both on.</li>
     </ol>
     <div class="card dark">
       <h3>The head</h3>
       <ul class="dots" style="font-size: 9.5pt;">
         <li>Press <span class="key">USER</span> to switch it off; press again to turn it on.</li>
         <li>It only transmits while a screen is listening.</li>
-        <li>About 20 s after the screen goes away it goes into <b>standby</b>, and comes back by itself when the screen does. After 30 minutes it switches off.</li>
-        <li>Problems (no sensor, camera failed) show on the screen's waiting page.</li>
+        <li>20 s after the screen goes away: <b>standby</b>; it comes back with the screen. Off after 30 minutes.</li>
+        <li>Problems (no sensor, camera failed) show on the screen.</li>
       </ul>
     </div>
   </div>
