@@ -5,14 +5,16 @@
 // ============================================================================
 
 // ---- Thermal sensor (MLX90640) wiring --------------------------------------
-// Solder the sensor's SDA and SCL to these GPIOs on the HT-HC33's J1 header.
-// They are the board's microSD-slot lines, so leave that slot empty. If the
-// sensor doesn't answer there, the head also tries SDA and SCL swapped, and
-// the other pair of SD-slot pins.
-#define THERMAL_SDA 11      // J1 "SD_MOSI"
-#define THERMAL_SCL 10      // J1 "SD_CS"
-#define THERMAL_ALT_SDA 16  // J1 "SD_MISO"
-#define THERMAL_ALT_SCL 15  // J1 "SD_CLK"
+// The HT-HC33 prints each pad's GPIO number next to it. Solder the sensor's
+// VCC to the pad printed "3V3", GND to "GND", and SDA and SCL to the pads
+// below. They are in the pin row that ends "RST GND 5V", and are marked #
+// (TF_Card): they are the microSD slot's lines, so leave that slot empty. If
+// the sensor doesn't answer there, the head also tries SDA and SCL swapped,
+// and the other pair of # pads.
+#define THERMAL_SDA 11      // pad "11", second in the row
+#define THERMAL_SCL 10      // pad "10", first in the row (next to the microSD slot)
+#define THERMAL_ALT_SDA 16  // pad "16"
+#define THERMAL_ALT_SCL 15  // pad "15"
 
 // Sensor sub-page rate: 4, 8, 16 or 32. The sensor has its own bus here, so
 // 32 keeps up, but it is noisier.
